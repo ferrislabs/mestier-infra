@@ -1,0 +1,71 @@
+# ---------------------------------------------------------------------------
+# argocd-platform values
+# ---------------------------------------------------------------------------
+
+# Hostname Argo CD is served on. You MUST also add this host to the
+# gateway-platform release (gateway.hosts) so the shared Gateway gets a matching
+# HTTPS listener + cert, and create an A record pointing at the LB IP.
+host: argocd.internal.ferriskey.rs
+
+# Reference to the shared Envoy Gateway created by the gateway-platform release.
+gateway:
+  name: internal-gateway
+  namespace: default
+
+# HTTPRoute that exposes the Argo CD server through the shared Gateway.
+httpRoute:
+  create: true
+  # Service from the argo-cd subchart. With fullnameOverride=argocd below it is
+  # "argocd-server" (port 80, plaintext — TLS is terminated at the Gateway).
+  serviceName: argocd-server
+  servicePort: 80
+
+# ---- Bundled Argo CD (upstream argo-cd subchart) --------------------------
+# Chart defaults are non-HA (single replicas, no redis-ha) — nothing to add.
+argo-cd:
+  enabled: true
+  fullnameOverride: argocd
+
+  global:
+    # Keep in sync with `host` above.
+    domain: argocd.internal.ferriskey.rs
+
+  # Direct OIDC against your provider — Dex is not needed.
+  dex:
+    enabled: false
+
+  configs:
+    params:
+      # TLS terminates at the Gateway; serve the API/UI in insecure (HTTP) mode
+      # so Envoy can talk plain HTTP/2 to argocd-server.
+      server.insecure: true
+
+    cm:
+      # Teach Argo CD how to assess the health of CloudNativePG Clusters so the
+      # app-of-apps actually waits for the database before the next sync-wave.
+      resource.customizations.health.postgresql.cnpg.io_Cluster: |
+        local hs = {}
+        if obj.status ~= nil then
+          if obj.status.conditions ~= nil then
+            for i, condition in ipairs(obj.status.conditions) do
+              if condition.type == "Ready" and condition.status == "True" then
+                hs.status = "Healthy"
+                hs.message = condition.message
+                return hs
+              end
+            end
+          end
+          if obj.status.phase ~= nil then
+            if obj.status.phase == "Cluster in healthy state" then
+              hs.status = "Healthy"
+              hs.message = obj.status.phase
+              return hs
+            end
+            hs.status = "Progressing"
+            hs.message = obj.status.phase
+            return hs
+          end
+        end
+        hs.status = "Progressing"
+        hs.message = "Waiting for CNPG cluster to be ready"
+        return hs

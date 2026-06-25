@@ -1,0 +1,17 @@
+# Ferriskey Helm values — production-specific overrides.
+# Layered on top of base/ferriskey/values.yaml.
+
+publicHost: auth.mestier.fr
+
+api:
+  server:
+    allowedOrigins:
+      - https://auth.mestier.fr
+
+gatewayAPI:
+  httpRoute:
+    # Attach to the existing Envoy Gateway that terminates TLS for *.mestier.fr
+    # (wildcard cert `mestier-tls`). No per-app certificate needed.
+    parentRefs:
+      - name: mestier-gateway
+        namespace: default

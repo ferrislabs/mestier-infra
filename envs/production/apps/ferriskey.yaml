@@ -1,0 +1,32 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: ferriskey
+  namespace: argocd
+  annotations:
+    # Sync-wave 1: runs after ferriskey-db (wave 0) is Healthy.
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  project: default
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: ferriskey
+  # Multi-source: Helm chart from the OCI registry, with value files (common base
+  # + production overrides) pulled from this git repo via $values.
+  sources:
+    - repoURL: ghcr.io/ferriskey/charts
+      chart: ferriskey
+      targetRevision: 0.6.1
+      helm:
+        valueFiles:
+          - $values/base/ferriskey/values.yaml
+          - $values/envs/production/ferriskey/values.yaml
+    - repoURL: https://github.com/ferrislabs/mestier-infra
+      targetRevision: main
+      ref: values
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

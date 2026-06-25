@@ -1,0 +1,7 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Env-agnostic base for the Ferriskey CNPG database. Environments overlay this
+# and set the target namespace (and any per-env patches: storage, instances...).
+resources:
+  - cluster.yaml

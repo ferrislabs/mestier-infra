@@ -1,0 +1,18 @@
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  # Namespace is set per-environment by the overlay (kustomization `namespace:`).
+  name: ferriskey-db
+spec:
+  # Single instance: the cluster is a single-node k3s VPS.
+  instances: 1
+  storage:
+    size: 2Gi
+
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      # Memory only — no CPU limit, to avoid throttling the database.
+      memory: 512Mi
