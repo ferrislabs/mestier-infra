@@ -38,6 +38,15 @@ databaseMigrations:
   # the ferriskey-db Application syncs in an earlier sync-wave).
   annotations:
     argocd.argoproj.io/hook: PreSync
+  serviceAccount:
+    # The Job runs its pod with this SA. Since the Job is a PreSync hook, the SA
+    # must be a hook too — otherwise it's only created in the main Sync phase
+    # (after PreSync), so the hook pod has no SA and ArgoCD blocks with
+    # "Resource not found in cluster: ServiceAccount/ferriskey-database-migrations".
+    # Lower sync-wave so the SA is applied before the Job (default wave 0).
+    annotations:
+      argocd.argoproj.io/hook: PreSync
+      argocd.argoproj.io/sync-wave: "-1"
 
 gatewayAPI:
   httpRoute:
