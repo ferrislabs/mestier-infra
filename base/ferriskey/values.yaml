@@ -6,6 +6,10 @@
 postgresql:
   enabled: false
 
+common:
+  image:
+    tag: "sha-e1d89e6"
+
 database:
   # Service name is identical in every namespace (CNPG `<cluster>-rw`), and the
   # API runs in the same namespace as its database — so this is env-agnostic.
