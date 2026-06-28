@@ -1,0 +1,16 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Production overlay for the Mestier database.
+namespace: mestier
+
+resources:
+  - ../../../../base/mestier/db
+
+# Per-env patches (storage size, instances, backups...) go here when needed, e.g.:
+# patches:
+#   - target: { kind: Cluster, name: mestier-db }
+#     patch: |
+#       - op: replace
+#         path: /spec/storage/size
+#         value: 20Gi

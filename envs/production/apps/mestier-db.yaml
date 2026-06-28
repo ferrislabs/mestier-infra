@@ -1,0 +1,25 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: mestier-db
+  namespace: argocd
+  annotations:
+    # Sync-wave 0: data layer is provisioned before the Mestier app (wave 1+).
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/ferrislabs/mestier-infra
+    targetRevision: main
+    path: envs/production/mestier/db
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: mestier
+  syncPolicy:
+    automated:
+      # Never auto-prune a stateful database: a Cluster removed from Git must not
+      # trigger an automatic delete (would destroy data).
+      prune: false
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

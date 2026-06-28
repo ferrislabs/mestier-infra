@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: mestier-rustfs
+  labels:
+    app.kubernetes.io/name: mestier-rustfs
+spec:
+  # ClusterIP: S3 API at mestier-rustfs:9000, web console at mestier-rustfs:9001.
+  selector:
+    app.kubernetes.io/name: mestier-rustfs
+  ports:
+    - name: s3
+      port: 9000
+      targetPort: s3
+    - name: console
+      port: 9001
+      targetPort: console
