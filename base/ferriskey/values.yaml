@@ -8,7 +8,7 @@ postgresql:
 
 common:
   image:
-    tag: "sha-e1d89e6"
+    tag: "0.7.0-rc1"
 
 database:
   # Service name is identical in every namespace (CNPG `<cluster>-rw`), and the
