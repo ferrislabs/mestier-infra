@@ -1,0 +1,109 @@
+# ---------------------------------------------------------------------------
+# kargo-platform values
+# ---------------------------------------------------------------------------
+
+# Hostname Kargo is served on. You MUST also add this host to the
+# gateway-platform release (gateway.hosts) so the shared Gateway gets a
+# matching HTTPS listener + cert, and create an A record pointing at the LB IP.
+host: kargo.internal.ferriskey.rs
+
+# Reference to the shared Envoy Gateway created by the gateway-platform release.
+gateway:
+  name: internal-gateway
+  namespace: default
+
+# HTTPRoute that exposes the Kargo API/UI server through the shared Gateway.
+httpRoute:
+  create: true
+  # Service from the kargo subchart. Its name is fixed upstream ("kargo-api"),
+  # served on port 80 (plaintext — TLS is terminated at the Gateway).
+  serviceName: kargo-api
+  servicePort: 80
+
+# RBAC granted to the Kargo controller so it can READ (never write) Argo CD
+# `Application` resources. Promotion itself happens by writing to git, never
+# by patching Applications directly, so get/list/watch is sufficient. See
+# templates/rbac.yaml. As of the Mestier delivery pipeline (kargo/mestier-
+# delivery/), no Stage's verification/promotionTemplate actually consumes
+# Application health yet — this RBAC is provisioned ahead of that, not dead
+# code, but it has no observable effect until a Stage uses an argocd-update
+# step or a verification block that reads it.
+argocdRbac:
+  create: true
+  # Namespace Argo CD (and its Applications) live in — see charts/argocd.
+  namespace: argocd
+  # ServiceAccount the Role is bound to. Fixed upstream to "kargo-controller"
+  # unless `kargo.controller.id` is set below (it isn't) — see
+  # templates/rbac.yaml for why this is a literal rather than a shared helper.
+  serviceAccountName: kargo-controller
+
+# ---- Bundled Kargo (upstream kargo subchart) -------------------------------
+# Chart defaults are non-HA (single controller/api/garbage-collector replica)
+# — nothing to add there.
+kargo:
+  enabled: true
+
+  api:
+    # Keep in sync with `host` above.
+    host: kargo.internal.ferriskey.rs
+
+    # TLS terminates at the Gateway; serve the API/UI in plain HTTP so Envoy
+    # can talk plain HTTP/2 to kargo-api. `terminatedUpstream: true` still
+    # makes Kargo generate https:// URLs (OIDC redirects, etc.) even though
+    # the pod itself listens for plain HTTP. Mirrors Argo CD's
+    # `server.insecure: true` in charts/argocd.
+    tls:
+      enabled: false
+      terminatedUpstream: true
+
+    # The chart's own Ingress is unused — the httpRoute above exposes
+    # kargo-api through the shared Gateway instead.
+    ingress:
+      enabled: false
+
+    # Direct OIDC against your provider — like Argo CD in this repo, no Dex
+    # middleman is needed as long as the IdP supports PKCE. Fill in
+    # issuerURL/clientID once an OIDC client is registered; until then OIDC
+    # stays disabled and only the admin account works.
+    oidc:
+      enabled: false
+      dex:
+        enabled: false
+      # issuerURL: https://<your-idp>/...
+      # clientID: kargo
+      # admins:
+      #   claims:
+      #     groups: [platform]
+
+    adminAccount:
+      enabled: true
+      # passwordHash and tokenSigningKey are secrets: supply them out of band
+      # (--set, a sealed secret, or api.secret.name pointing at an existing
+      # Secret) — never commit real values here.
+      passwordHash: ""
+      tokenSigningKey: ""
+
+  controller:
+    argocd:
+      # Lets the controller watch Argo CD Applications. Not yet exercised by
+      # any Stage in kargo/mestier-delivery/ (none declares a verification
+      # block or an argocd-update step) — enabled ahead of that need, see
+      # argocdRbac above for the RBAC this requires.
+      integrationEnabled: true
+      namespace: argocd
+      # All Argo CD Applications in this repo live in the argocd namespace
+      # (see envs/production/apps/*.yaml), so watching only that namespace
+      # lets the controller run on a namespaced Role instead of a
+      # ClusterRole. See argocdRbac above and templates/rbac.yaml.
+      watchArgocdNamespaceOnly: true
+
+  # The chart's own Argo CD integration RBAC (a namespaced Role bound to the
+  # controller's ServiceAccount) grants get/list/patch/watch on Applications.
+  # We don't want the patch: promotions write to git, they never patch
+  # Applications directly. Disable the chart's own Role/RoleBinding here;
+  # templates/rbac.yaml grants the same ServiceAccount get/list/watch only.
+  argocd:
+    dataPlane:
+      install: false
+      kargoController:
+        install: false

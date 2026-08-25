@@ -1,0 +1,12 @@
+apiVersion: v2
+name: kargo
+description: A Helm chart for Kubernetes
+type: application
+version: 0.1.0
+appVersion: "1.11.2"
+
+dependencies:
+  - name: kargo
+    version: "1.11.2"
+    repository: "oci://ghcr.io/akuity/kargo-charts"
+    condition: kargo.enabled

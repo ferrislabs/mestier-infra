@@ -1,0 +1,27 @@
+{{- include "kargo-platform.validate" . -}}
+{{- if .Values.httpRoute.create }}
+# Routes the Kargo host through the shared Envoy Gateway to kargo-api.
+# The Gateway terminates TLS (HTTPS listener for {{ .Values.host }}); traffic to
+# the backend is plain HTTP (server runs with api.tls.enabled=false).
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: kargo-api
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "kargo-platform.labels" . | nindent 4 }}
+spec:
+  parentRefs:
+    - name: {{ .Values.gateway.name }}
+      namespace: {{ .Values.gateway.namespace }}
+  hostnames:
+    - {{ .Values.host | quote }}
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /
+      backendRefs:
+        - name: {{ .Values.httpRoute.serviceName }}
+          port: {{ .Values.httpRoute.servicePort }}
+{{- end }}
