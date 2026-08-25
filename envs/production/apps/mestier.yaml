@@ -1,0 +1,30 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: mestier
+  namespace: argocd
+  annotations:
+    # Sync-wave 1: runs after mestier-db/mestier-redis/mestier-rustfs (wave 0).
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  project: default
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: mestier
+  sources:
+    - repoURL: ghcr.io/ferrislabs/charts
+      chart: mestier
+      targetRevision: "0.2.0"
+      helm:
+        valueFiles:
+          - $values/base/mestier/values.yaml
+          - $values/envs/production/mestier/values.yaml
+    - repoURL: https://github.com/ferrislabs/mestier-infra
+      targetRevision: main
+      ref: values
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
