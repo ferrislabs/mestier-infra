@@ -1,0 +1,56 @@
+# Stage `dev`: first hop out of the Warehouse. Auto-promotion for this Stage
+# is granted by ProjectConfig (../project-config.yaml), not here — Stage has
+# no promotion-policy field. Source:
+# https://docs.kargo.io/user-guide/how-to-guides/working-with-projects
+#
+# Promotion write-back: git-clone -> yaml-update -> git-commit -> git-push,
+# writing straight to `main` (no PR) so ArgoCD's existing auto-sync on
+# envs/dev/mestier picks it up. Step config fields verified against:
+# https://docs.kargo.io/user-guide/reference-docs/promotion-steps/git-clone
+# https://docs.kargo.io/user-guide/reference-docs/promotion-steps/yaml-update
+# https://docs.kargo.io/user-guide/reference-docs/promotion-steps/git-commit
+# https://docs.kargo.io/user-guide/reference-docs/promotion-steps/git-push
+# imageFrom() signature (repoURL -> Image{Tag, Digest, ...}) verified against:
+# https://docs.kargo.io/user-guide/reference-docs/expressions
+apiVersion: kargo.akuity.io/v1alpha1
+kind: Stage
+metadata:
+  name: dev
+  namespace: mestier-delivery
+  annotations:
+    # Wave 1: after the Warehouse (wave 0) exists.
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  requestedFreight:
+    - origin:
+        kind: Warehouse
+        name: mestier
+      sources:
+        direct: true
+  promotionTemplate:
+    spec:
+      steps:
+        - uses: git-clone
+          config:
+            repoURL: https://github.com/ferrislabs/mestier-infra
+            checkout:
+              - branch: main
+                path: ./out
+        - uses: yaml-update
+          as: update-values
+          config:
+            path: ./out/envs/dev/mestier/values.yaml
+            updates:
+              - key: api.image.tag
+                value: ${{ imageFrom("ghcr.io/ferrislabs/mestier-api").Tag }}
+              - key: webapp.image.tag
+                value: ${{ imageFrom("ghcr.io/ferrislabs/mestier-webapp").Tag }}
+        - uses: git-commit
+          as: commit
+          config:
+            path: ./out
+            message: ${{ outputs['update-values'].commitMessage }}
+        - uses: git-push
+          config:
+            path: ./out
+            targetBranch: main

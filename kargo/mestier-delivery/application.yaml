@@ -1,0 +1,41 @@
+# ArgoCD Application deploying the Kargo objects for the Mestier delivery
+# pipeline (this directory). Platform infra, deliberately NOT nested under
+# envs/production/apps (an env's app-of-apps): Kargo's Project/Warehouse/Stage
+# objects are cluster-wide delivery plumbing, not part of any one environment.
+# Bootstrap the same way as envs/production/root.yaml:
+#
+#   kubectl apply -f kargo/mestier-delivery/application.yaml
+#
+# Prerequisites (see README.md "Kargo delivery pipeline"): Kargo itself
+# installed in namespace `kargo` (charts/kargo), and a Secret labeled
+# kargo.akuity.io/cred-type: git in namespace `mestier-delivery` holding
+# push credentials for this repo's `main` — Kargo resolves it by matching
+# repoURL, no explicit reference needed in the Stages' git-clone/git-push
+# steps.
+#
+# No CreateNamespace=true syncOption here, deliberately: the `mestier-delivery`
+# namespace is created by the Kargo controller reconciling the Project object
+# below (labeled kargo.akuity.io/project: "true"), not by ArgoCD. Pre-creating
+# an unlabeled namespace of the same name via ArgoCD risks Kargo refusing to
+# adopt it (namespace adoption requires that label — see project.yaml).
+# Source: https://docs.kargo.io/user-guide/how-to-guides/working-with-projects
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: kargo-mestier-delivery
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/ferrislabs/mestier-infra
+    targetRevision: main
+    path: kargo/mestier-delivery
+    directory:
+      recurse: true
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: mestier-delivery
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true

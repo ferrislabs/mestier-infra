@@ -1,0 +1,51 @@
+# Warehouse `mestier`: subscribes to both Mestier images. Each reconcile
+# combines the latest observed revision of every subscription into a single
+# Freight — this is inherent Warehouse behavior, not a special option.
+# Source: https://docs.kargo.io/user-guide/how-to-guides/working-with-warehouses
+#
+# imageSelectionStrategy: NewestBuild — chosen deliberately over the default
+# (SemVer). Images are tagged by sha on every push to `main`, so tags carry
+# no semantic-version or lexical-recency ordering; SemVer would reject every
+# tag outright and Lexical would sort short shas alphabetically, not
+# chronologically. NewestBuild selects by actual image build/push timestamp
+# from registry metadata, which is what "suit toute nouvelle image poussée
+# sur main" requires. No `constraint` is set (constraint is for SemVer/Lexical
+# ranges or the Digest strategy's mutable-tag name; NewestBuild uses neither).
+# Source: https://docs.kargo.io/user-guide/how-to-guides/working-with-warehouses
+apiVersion: kargo.akuity.io/v1alpha1
+kind: Warehouse
+metadata:
+  name: mestier
+  namespace: mestier-delivery
+  annotations:
+    # Wave 0: only needs the namespace from the Project (wave -1); independent
+    # of ProjectConfig.
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  # Explicit interval (5m matches the CRD default — spelled out so it isn't
+  # mistaken for an oversight).
+  interval: 5m
+  subscriptions:
+    - image:
+        repoURL: ghcr.io/ferrislabs/mestier-api
+        imageSelectionStrategy: NewestBuild
+        # `docker.yaml` (repo mestier) also pushes a mutable `latest` tag on
+        # every merge to main. Without this filter, NewestBuild would treat
+        # `latest` as a legitimate candidate — it shares the same build
+        # timestamp as its `sha-` sibling, so which one "wins" comes down to
+        # an incidental lexical tie-break. If `latest` ever won, yaml-update
+        # would write the literal string "latest" into values.yaml, which is
+        # already what's there before any promotion — an empty diff, no
+        # commit, and the Freight silently never lands. Restricting to
+        # `sha-*` also avoids NewestBuild fetching metadata for every one of
+        # the (currently 100+) other tags on each reconcile, which upstream's
+        # own docs warn can hit registry rate limits.
+        allowTagsRegexes:
+          - "^sha-"
+        cacheByTag: true
+    - image:
+        repoURL: ghcr.io/ferrislabs/mestier-webapp
+        imageSelectionStrategy: NewestBuild
+        allowTagsRegexes:
+          - "^sha-"
+        cacheByTag: true
