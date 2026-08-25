@@ -1,0 +1,50 @@
+# Stage `staging`: promotes only Freight that has already been verified on
+# `dev` (sources.stages). Auto-promotion granted via ProjectConfig, see dev.yaml
+# header for the sourcing notes shared by all three Stages.
+apiVersion: kargo.akuity.io/v1alpha1
+kind: Stage
+metadata:
+  name: staging
+  namespace: mestier-delivery
+  annotations:
+    # Wave 2: after `dev` (wave 1) — not a hard Kargo requirement (Stages don't
+    # need their upstream Stage applied first, requestedFreight.sources.stages
+    # is just a name reference resolved at reconcile time), but keeping the
+    # apply order matching the promotion order makes the manifests easier to
+    # reason about.
+    argocd.argoproj.io/sync-wave: "2"
+spec:
+  requestedFreight:
+    - origin:
+        kind: Warehouse
+        name: mestier
+      sources:
+        stages:
+          - dev
+  promotionTemplate:
+    spec:
+      steps:
+        - uses: git-clone
+          config:
+            repoURL: https://github.com/ferrislabs/mestier-infra
+            checkout:
+              - branch: main
+                path: ./out
+        - uses: yaml-update
+          as: update-values
+          config:
+            path: ./out/envs/staging/mestier/values.yaml
+            updates:
+              - key: api.image.tag
+                value: ${{ imageFrom("ghcr.io/ferrislabs/mestier-api").Tag }}
+              - key: webapp.image.tag
+                value: ${{ imageFrom("ghcr.io/ferrislabs/mestier-webapp").Tag }}
+        - uses: git-commit
+          as: commit
+          config:
+            path: ./out
+            message: ${{ outputs['update-values'].commitMessage }}
+        - uses: git-push
+          config:
+            path: ./out
+            targetBranch: main

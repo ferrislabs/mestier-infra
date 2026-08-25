@@ -1,0 +1,49 @@
+# Stage `production`: promotes only Freight already verified on `staging`.
+# NOT listed with autoPromotionEnabled: true anywhere — ProjectConfig
+# (../project-config.yaml) explicitly sets it to false for this Stage, so a
+# promotion here only ever starts from an explicit human trigger
+# (`kargo promote production` / the Kargo UI).
+apiVersion: kargo.akuity.io/v1alpha1
+kind: Stage
+metadata:
+  name: production
+  namespace: mestier-delivery
+  annotations:
+    # Wave 3: after `staging` (wave 2) — see staging.yaml for why this
+    # ordering is a readability choice, not a Kargo requirement.
+    argocd.argoproj.io/sync-wave: "3"
+spec:
+  requestedFreight:
+    - origin:
+        kind: Warehouse
+        name: mestier
+      sources:
+        stages:
+          - staging
+  promotionTemplate:
+    spec:
+      steps:
+        - uses: git-clone
+          config:
+            repoURL: https://github.com/ferrislabs/mestier-infra
+            checkout:
+              - branch: main
+                path: ./out
+        - uses: yaml-update
+          as: update-values
+          config:
+            path: ./out/envs/production/mestier/values.yaml
+            updates:
+              - key: api.image.tag
+                value: ${{ imageFrom("ghcr.io/ferrislabs/mestier-api").Tag }}
+              - key: webapp.image.tag
+                value: ${{ imageFrom("ghcr.io/ferrislabs/mestier-webapp").Tag }}
+        - uses: git-commit
+          as: commit
+          config:
+            path: ./out
+            message: ${{ outputs['update-values'].commitMessage }}
+        - uses: git-push
+          config:
+            path: ./out
+            targetBranch: main

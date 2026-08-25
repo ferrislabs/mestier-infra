@@ -1,0 +1,36 @@
+# DEVIATION from the frozen contract's assumed mechanism (not from the frozen
+# POLICY): the mission text anticipated auto-promotion living on
+# `Stage.spec.promotionPolicy.autoPromotionEnabled`. Current Kargo docs place
+# it on a separate, project-scoped `ProjectConfig` resource instead — Stages
+# carry no promotion-policy field at all. Source:
+# https://docs.kargo.io/user-guide/how-to-guides/working-with-projects
+# ("Auto-promotion being enabled through Project-level configuration is a
+# security measure": a user able to edit a Stage but not authorized to
+# promote to it must not be able to grant themselves auto-promotion by
+# editing the Stage.)
+#
+# `ProjectConfig` MUST share its Project's name and live in its namespace.
+# The dev/staging auto-promotion + production manual-only POLICY itself is
+# unchanged from the contract; only the field's location moved.
+apiVersion: kargo.akuity.io/v1alpha1
+kind: ProjectConfig
+metadata:
+  name: mestier-delivery
+  namespace: mestier-delivery
+  annotations:
+    # Wave 0: needs the `mestier-delivery` namespace created by the Project
+    # (wave -1) to exist, but has no dependency on the Warehouse/Stages.
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  promotionPolicies:
+    - stageSelector:
+        name: dev
+      autoPromotionEnabled: true
+    - stageSelector:
+        name: staging
+      autoPromotionEnabled: true
+    - stageSelector:
+        name: production
+      # Explicit, even though false is the default: production only promotes
+      # on an explicit human trigger (`kargo promote` / UI), never automatically.
+      autoPromotionEnabled: false

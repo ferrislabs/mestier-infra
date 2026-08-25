@@ -1,0 +1,24 @@
+# Kargo Project for the Mestier delivery pipeline (dev -> staging -> production).
+#
+# `Project` is a CLUSTER-SCOPED resource: reconciling it creates a specially
+# labeled Namespace with the SAME NAME as the Project
+# (kargo.akuity.io/project: "true"). Source:
+# https://docs.kargo.io/user-guide/how-to-guides/working-with-projects
+#
+# Deliberately named "mestier-delivery", NOT "mestier": the application
+# namespace `mestier` already exists in this cluster (data layer + app, see
+# envs/production/mestier and base/mestier). Confirmed against the docs above
+# that Project creation is namespace-creating and namespace-adopting only via
+# that label — an unlabeled pre-existing "mestier" namespace would NOT be
+# silently adopted, so this would surface as a namespace-provisioning conflict
+# rather than a silent takeover. Using a distinct name sidesteps the whole
+# question. This validates the frozen-contract hypothesis.
+apiVersion: kargo.akuity.io/v1alpha1
+kind: Project
+metadata:
+  name: mestier-delivery
+  annotations:
+    # Applied first by the owning Application (see application.yaml): the
+    # namespace this Project creates must exist before the namespaced
+    # ProjectConfig/Warehouse/Stage resources below can be applied into it.
+    argocd.argoproj.io/sync-wave: "-1"
