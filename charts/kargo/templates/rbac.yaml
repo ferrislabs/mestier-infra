@@ -1,0 +1,44 @@
+{{- include "kargo-platform.validate" . -}}
+{{- if .Values.argocdRbac.create }}
+# Grants the Kargo controller READ-ONLY access to Argo CD's `Application`
+# resources, so it can factor their health/sync state into promotion
+# decisions. Promotion itself is done by writing to git (the controller
+# never patches Applications directly), so get/list/watch is sufficient.
+#
+# This replaces (rather than complements) the upstream kargo chart's own
+# Argo CD integration RBAC, which additionally grants `patch` on
+# Applications — see the `argocd:` block in values.yaml, which disables it
+# via `argocd.dataPlane.install` / `argocd.dataPlane.kargoController.install`.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: kargo-controller-argocd-viewer
+  namespace: {{ .Values.argocdRbac.namespace }}
+  labels:
+    {{- include "kargo-platform.labels" . | nindent 4 }}
+rules:
+  - apiGroups:
+      - argoproj.io
+    resources:
+      - applications
+    verbs:
+      - get
+      - list
+      - watch
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: kargo-controller-argocd-viewer
+  namespace: {{ .Values.argocdRbac.namespace }}
+  labels:
+    {{- include "kargo-platform.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: kargo-controller-argocd-viewer
+subjects:
+  - kind: ServiceAccount
+    name: {{ .Values.argocdRbac.serviceAccountName }}
+    namespace: {{ .Release.Namespace }}
+{{- end }}
