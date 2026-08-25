@@ -1,0 +1,8 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Staging overlay for Mestier Redis.
+namespace: mestier-staging
+
+resources:
+  - ../../../../base/mestier/redis

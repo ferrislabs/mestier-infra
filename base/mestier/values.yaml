@@ -1,0 +1,50 @@
+# Mestier Helm values — common across all environments.
+# Chart: oci://ghcr.io/ferrislabs/charts/mestier (version pinned in the Application).
+# Per-env files override: hosts, allowedOrigins, gatewayApi parentRefs/hostnames, image tags.
+
+api:
+  image:
+    repository: ghcr.io/ferrislabs/mestier-api
+  env:
+    DATABASE_HOST: mestier-db-rw
+    DATABASE_PORT: "5432"
+    DATABASE_NAME: app
+    DATABASE_USER: app
+    AUTH_ISSUER: https://auth.mestier.fr/realms/mestier
+    RATE_LIMIT_REDIS_URL: redis://mestier-redis:6379
+    FILE_STORAGE_ENDPOINT: http://mestier-rustfs:9000
+    FILE_STORAGE_BUCKET: mestier-files
+    FILE_STORAGE_REGION: us-east-1
+  secret:
+    create: true
+    valueFrom:
+      DATABASE_PASSWORD:
+        secretName: mestier-db-app
+        key: password
+      FILE_STORAGE_ACCESS_KEY_ID:
+        secretName: mestier-rustfs-credentials
+        key: accessKey
+      FILE_STORAGE_SECRET_ACCESS_KEY:
+        secretName: mestier-rustfs-credentials
+        key: secretKey
+    # AUTH_CLIENT_SECRET is wired per-env (see envs/<env>/mestier/values.yaml)
+    # since each environment registers its own OIDC client in the shared
+    # Ferriskey instance. AUTOMATION_SECRET_KEY is intentionally left unset
+    # everywhere: the chart omits an unset key rather than writing an empty
+    # string, and the app treats "unset" as "automation feature disabled" —
+    # a graceful, contained degradation, not a boot failure. Set it (via a
+    # valueFrom override here or per-env) only once the automation feature
+    # is actually wanted.
+
+webapp:
+  image:
+    repository: ghcr.io/ferrislabs/mestier-webapp
+
+serviceAccount:
+  create: true
+
+ingress:
+  enabled: false
+
+gatewayApi:
+  enabled: true

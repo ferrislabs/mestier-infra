@@ -1,0 +1,37 @@
+# Mestier Helm values — staging overrides.
+api:
+  image:
+    tag: "latest"   # bootstrap value — the Kargo staging Stage (issue #6) takes ownership of this field
+  env:
+    ALLOWED_ORIGINS: https://staging.mestier.fr
+    # Distinct OIDC client per environment, all against the one shared
+    # Ferriskey instance (see base/mestier/values.yaml's AUTH_ISSUER) — so a
+    # token issued for dev/production is not accepted here. Register this
+    # client id in Ferriskey and create the matching secret below before
+    # first sync (see README.md).
+    AUTH_CLIENT_ID: mestier-staging
+  secret:
+    valueFrom:
+      # Created out-of-band, same pattern as mestier-rustfs-credentials —
+      # never committed. See README.md "Ferriskey OIDC client per environment".
+      AUTH_CLIENT_SECRET:
+        secretName: mestier-oidc-client
+        key: clientSecret
+
+webapp:
+  image:
+    tag: "latest"
+  env:
+    API_URL: https://staging-api.mestier.fr
+    ISSUER_URL: https://auth.mestier.fr/realms/mestier
+
+gatewayApi:
+  parentRefs:
+    - name: mestier-gateway
+      namespace: default
+  api:
+    hostnames:
+      - staging-api.mestier.fr
+  webapp:
+    hostnames:
+      - staging.mestier.fr
