@@ -12,6 +12,11 @@ api:
       # browser — without this, the browser's CORS preflight rejects those
       # requests before they ever reach Ferriskey.
       - https://app.mestier.fr
+      # staging and dev share this same Ferriskey instance (a different
+      # realm, mestier-staging, but the same host/CORS surface) — see
+      # envs/{staging,dev}/mestier/values.yaml's AUTH_ISSUER.
+      - https://staging.mestier.fr
+      - https://dev.mestier.fr
 
 gatewayAPI:
   httpRoute:

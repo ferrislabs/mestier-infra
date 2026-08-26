@@ -7,12 +7,21 @@ api:
     pullPolicy: Always
   env:
     ALLOWED_ORIGINS: https://staging.mestier.fr
-    # Distinct OIDC client per environment, all against the one shared
-    # Ferriskey instance (see base/mestier/values.yaml's AUTH_ISSUER) — so a
-    # token issued for dev/production is not accepted here. Register this
-    # client id in Ferriskey and create the matching secret below before
-    # first sync (see README.md).
-    AUTH_CLIENT_ID: mestier-staging
+    # staging and dev share one realm (mestier-staging), distinct from
+    # production's own (mestier) — overrides base/mestier/values.yaml's
+    # AUTH_ISSUER, which is production's.
+    AUTH_ISSUER: https://auth.mestier.fr/api/realms/mestier-staging
+    # api-staging/webapp-staging are this env's own clients within that
+    # shared realm — not shared with dev, even though the realm is. Register
+    # both in Ferriskey and create the matching secret below before first
+    # sync (see README.md).
+    AUTH_CLIENT_ID: api-staging
+    # RustFS is one shared instance across every environment (production's),
+    # not one per env — only the bucket is environment-specific. Overrides
+    # base/mestier/values.yaml's FILE_STORAGE_ENDPOINT, which points at this
+    # namespace's own RustFS — staging/dev have none.
+    FILE_STORAGE_ENDPOINT: http://mestier-rustfs.mestier.svc.cluster.local:9000
+    FILE_STORAGE_BUCKET: mestier-files-staging
   secret:
     valueFrom:
       # Created out-of-band, same pattern as mestier-rustfs-credentials —
@@ -20,26 +29,45 @@ api:
       AUTH_CLIENT_SECRET:
         secretName: mestier-oidc-client
         key: clientSecret
+      # Same credentials as production's mestier-rustfs-credentials — it's
+      # the same RustFS instance, just a different bucket. The Secret itself
+      # is copied into this namespace (Kubernetes Secrets don't cross
+      # namespaces on their own), never re-generated. See README.md.
+      FILE_STORAGE_ACCESS_KEY_ID:
+        secretName: mestier-rustfs-credentials
+        key: accessKey
+      FILE_STORAGE_SECRET_ACCESS_KEY:
+        secretName: mestier-rustfs-credentials
+        key: secretKey
 
 webapp:
   image:
     tag: sha-16be7bb
     pullPolicy: Always
   env:
-    API_URL: https://staging-api.mestier.fr
-    # /api prefix required — see base/mestier/values.yaml's AUTH_ISSUER comment.
-    ISSUER_URL: https://auth.mestier.fr/api/realms/mestier
-    # Same client id as api.env.AUTH_CLIENT_ID above — see production's
-    # values.yaml for why this isn't sensitive.
-    OIDC_CLIENT_ID: mestier-staging
+    # Same host as the API — see gatewayApi below. The webapp calls its own
+    # origin at /api/v1/..., no separate api.staging.mestier.fr.
+    API_URL: https://staging.mestier.fr
+    ISSUER_URL: https://auth.mestier.fr/api/realms/mestier-staging
+    # Its own client, distinct from api.env.AUTH_CLIENT_ID — a public PKCE
+    # client for the browser flow, not the API's. Not sensitive (a public
+    # OAuth client identifier), unlike AUTH_CLIENT_SECRET.
+    OIDC_CLIENT_ID: webapp-staging
 
 gatewayApi:
   parentRefs:
     - name: mestier-gateway
       namespace: default
+  # One host for both — mirrors Ferriskey's own auth.mestier.fr split
+  # (/api -> ferriskey-api, / -> ferriskey-webapp). api's PathPrefix "/api"
+  # is evaluated ahead of webapp's catch-all "/" regardless of which
+  # HTTPRoute object is applied first — Gateway API merges routes for a
+  # hostname by path specificity, not by object identity.
   api:
     hostnames:
-      - staging-api.mestier.fr
+      - staging.mestier.fr
+    path: /api
   webapp:
     hostnames:
       - staging.mestier.fr
+    path: /
