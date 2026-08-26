@@ -6,6 +6,11 @@ metadata:
   annotations:
     # Sync-wave 1: runs after mestier-db-dev/mestier-redis-dev (wave 0).
     argocd.argoproj.io/sync-wave: "1"
+    # Authorizes the Kargo `dev` Stage (project mestier-delivery) to manage
+    # this Application via an `argocd-update` promotion step — without this,
+    # Kargo refuses to touch it. See
+    # https://docs.kargo.io/user-guide/reference-docs/promotion-steps/argocd-update
+    kargo.akuity.io/authorized-stage: mestier-delivery:dev
 spec:
   project: default
   destination:

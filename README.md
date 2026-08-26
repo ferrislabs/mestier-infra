@@ -178,6 +178,16 @@ ArgoCD then reconciles each environment automatically. Production also carries F
 > kubectl -n mestier-delivery label secret mestier-infra-git-push kargo.akuity.io/cred-type=git
 > ```
 
+> **Kargo Discord notification credential** — the `staging`/`production` Stages' `http` step
+> posts to a Discord webhook using `${{ secret('discord-webhook').url }}`. Create it as a generic
+> credential (not `git`) in the same namespace:
+>
+> ```bash
+> kubectl -n mestier-delivery create secret generic discord-webhook \
+>   --from-literal=url="<the Discord channel's webhook URL>"
+> kubectl -n mestier-delivery label secret discord-webhook kargo.akuity.io/cred-type=generic
+> ```
+
 ### Passwords
 
 ```bash
@@ -275,6 +285,39 @@ it like any other commit. See `kargo/mestier-delivery/` for the `Project`/`Wareh
 definitions, and the "Kargo git write-back credential" bootstrap note above for the one secret
 this needs that isn't in git.
 
+**Verification — a promotion is not "done" at `git-push`.** Every Stage's `promotionTemplate`
+ends its write-back with an `argocd-update` step referencing that env's Application
+(`mestier-dev` / `mestier-staging` / `mestier`). This activates Kargo's [Implicit ArgoCD
+Verification](https://docs.kargo.io/user-guide/how-to-guides/verification): the step — and so the
+whole promotion — only succeeds once ArgoCD reports the Application `Synced` **and** `Healthy`,
+i.e. pods actually came up on the new tag, not merely "the commit landed". `staging` and
+`production` only ever auto-promote/accept Freight that a Stage has itself verified this way. No
+Argo Rollouts `AnalysisTemplate` is involved — that path needs Argo Rollouts CRDs, which this
+cluster doesn't run — this is Kargo's own health check, and it requires the Application to carry
+`kargo.akuity.io/authorized-stage: mestier-delivery:<stage>` (already set on all three
+`envs/*/apps/mestier*.yaml`; Kargo silently refuses to touch an Application missing it).
+
+**Git tag on every verified production promotion.** Once `production`'s `argocd-update` step
+confirms `mestier` is `Healthy`, the Stage tags this repo — `production-sha-<shortsha>` — and
+pushes the tag. Because the tag step runs *after* verification, its existence is itself the audit
+trail: `git tag -l 'production-*'` lists every production deploy that actually came up healthy,
+distinct from every production deploy merely *attempted*. This tags `mestier-infra`, not the
+`mestier` app repo, and needs no credential beyond the existing git write-back one.
+
+**Discord notification on `staging`/`production`.** Same ordering guarantee: the `http` step
+posting to Discord (see "Kargo Discord notification credential" above) is the last step, so a
+message only ever arrives once the environment is confirmed healthy — a broken rollout stops at
+`argocd-update` and nothing gets reported as promoted. `dev` stays silent (too frequent, and
+nothing downstream depends on a human noticing). Native Kargo `send-message` notifications exist
+but are an [Akuity-Platform-only](https://docs.kargo.io/) feature; the generic `http` step is the
+open-source-compatible substitute and works the same with any webhook-based receiver.
+
+**Known gap**: this only notifies on a *successful* verified promotion. A promotion that fails
+verification (Application goes `Degraded`/never reaches `Healthy`) currently reports nowhere but
+`kargo get promotions -n mestier-delivery` / the Kargo UI — there is no OSS-native "on failure"
+hook analogous to `argocd-update`'s health gating. Check the pipeline after a promotion you expect
+to have gone out; don't assume silence means success.
+
 **Accepted residual risk, by design of the environment/promotion policy already chosen for this
 pipeline**: dev and staging share Ferriskey's issuer with production (mitigated by each having
 its own OIDC client, not full isolation), and dev/staging auto-promote any image someone manages
@@ -283,8 +326,94 @@ review or verification step before promotion). Both are consequences of "one sha
 "dev/staging auto-promote" as decided for this environment topology, not oversights — revisit if
 that trade-off ever needs tightening.
 
+## Rollback
+
+The mechanism is the same for every environment — **re-promote the last known-good Freight** —
+because that's a normal promotion Kargo already verifies (see "Verification" above); it is not a
+special code path. `production`'s manual-only policy makes this safe by default. `dev`/`staging`
+auto-promote, which needs one extra step (below) so your rollback doesn't get immediately
+overwritten by the next Warehouse discovery.
+
+### 1. Find the last known-good Freight
+
+```bash
+# What production is running now, and its promotion history:
+kargo get stage production -n mestier-delivery -o yaml
+kargo get freight -n mestier-delivery
+```
+
+Or use the audit trail directly, when you know a specific past release worked (production only —
+these tags only exist for promotions that passed `argocd-update`'s health check, see "Git tag on
+every verified production promotion" above):
+
+```bash
+git -C mestier-infra tag -l 'production-*' --sort=-creatordate | sed -n '2,5p'
+# → production-sha-<shortsha> of the last few verified deploys, newest first;
+#   the one you want is usually the *second* entry, i.e. the one before the bad one.
+```
+
+The tag name embeds the `mestier-api` image tag (`sha-<shortsha>`). Match that against
+`kargo get freight -n mestier-delivery` to find the Freight ID that produced it — that ID is what
+`kargo promote` takes.
+
+### 2. Production — just re-promote it
+
+```bash
+kargo promote --project mestier-delivery --stage production --freight <good-freight-id>
+```
+
+Runs the exact same pipeline as any promotion: writes the old tags into
+`envs/production/mestier/values.yaml`, waits for `mestier` to be `Healthy` again, tags
+`mestier-infra`, notifies Discord. If the bad Freight only just went out and staging/dev haven't
+moved on yet, no further action is needed.
+
+### 3. `dev` / `staging` — pause auto-promotion first
+
+Left alone, the Warehouse's next discovery cycle can auto-promote a newer Freight right back over
+your rollback (that's the point of auto-promotion — it always wants the newest verified image).
+Hold the Stage still before rolling it back:
+
+```bash
+kubectl -n mestier-delivery patch projectconfig mestier-delivery --type merge -p '
+spec:
+  promotionPolicies:
+  - stageSelector: {name: dev}
+    autoPromotionEnabled: false
+  - stageSelector: {name: staging}
+    autoPromotionEnabled: false
+  - stageSelector: {name: production}
+    autoPromotionEnabled: false
+'
+```
+
+Then re-promote the good Freight to that Stage (`kargo promote --stage dev|staging --freight ...`,
+same as step 2). Once you're ready to resume the normal flow, flip `dev`/`staging` back to `true`
+— **not** by re-applying the live-patched object, but by re-syncing
+`kargo/mestier-delivery/project-config.yaml` from git (`argocd app sync kargo-mestier-delivery` or
+just wait for its next auto-sync), so the patch above doesn't quietly become permanent drift.
+
+### Emergency alternative: bypass Kargo entirely
+
+If Kargo itself is unavailable (down, misconfigured) and an environment needs to come back
+*right now*, hand-edit the tag and push directly:
+
+```bash
+# e.g. envs/production/mestier/values.yaml
+sed -i 's/tag: sha-.*/tag: sha-<known-good-shortsha>/' envs/production/mestier/values.yaml
+git commit -am "fix: emergency rollback of mestier to sha-<known-good-shortsha>"
+git push origin main
+```
+
+ArgoCD picks it up on its own (already watching `main`), no Kargo involvement needed. The
+trade-off: this skips the `argocd-update` health gate entirely (you're asserting it's good, not
+verifying it), and it leaves Kargo's own bookkeeping (`Stage.status.currentFreight`) pointing at
+the Freight it still believes is deployed. Treat this as a stop-the-bleeding move only — follow up
+with a real `kargo promote` of that same good Freight once Kargo is healthy again, so its state
+matches reality and auto-promotion doesn't fight you on the next discovery cycle.
+
 ## Next steps (not in this repo yet)
 
 - CNPG backups to the RustFS S3 bucket
-- A verification step (health/smoke check) between Stages, beyond "the last promotion succeeded" —
-  today's Stages carry no `verification` block
+- Notification on a *failed* verification (see "Known gap" above) — today, Discord only hears
+  about promotions that succeeded; a `Degraded` Application currently reports nowhere but
+  `kargo get promotions` / the Kargo UI.

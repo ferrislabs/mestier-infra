@@ -1,6 +1,13 @@
 # Stage `staging`: promotes only Freight that has already been verified on
 # `dev` (sources.stages). Auto-promotion granted via ProjectConfig, see dev.yaml
 # header for the sourcing notes shared by all three Stages.
+#
+# argocd-update + http notify: see dev.yaml for why the argocd-update step is
+# what makes "verified" mean something (Implicit ArgoCD Verification, no
+# Argo Rollouts needed) — same reasoning here, against `mestier-staging`.
+# The http step notifies Discord and only runs once argocd-update has
+# actually returned success, i.e. once staging is observably Healthy — so a
+# broken deploy never gets reported as "promoted".
 apiVersion: kargo.akuity.io/v1alpha1
 kind: Stage
 metadata:
@@ -48,3 +55,24 @@ spec:
           config:
             path: ./out
             targetBranch: main
+        - uses: argocd-update
+          config:
+            apps:
+              - name: mestier-staging
+                namespace: argocd
+        - uses: http
+          as: notify-discord
+          config:
+            method: POST
+            url: ${{ secret('discord-webhook').url }}
+            headers:
+              - name: Content-Type
+                value: application/json
+            body: >-
+              ${{ quote({
+                "content": "🚧 **staging** ← mestier promoted — api `" +
+                  imageFrom("ghcr.io/ferrislabs/mestier-api").Tag +
+                  "`, webapp `" +
+                  imageFrom("ghcr.io/ferrislabs/mestier-webapp").Tag +
+                  "` — Healthy in ArgoCD."
+              }) }}
