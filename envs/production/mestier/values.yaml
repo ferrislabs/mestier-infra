@@ -26,6 +26,11 @@ webapp:
   env:
     API_URL: https://api.mestier.fr
     ISSUER_URL: https://auth.mestier.fr/realms/mestier
+    # Same client id as api.env.AUTH_CLIENT_ID above — the frontend needs it
+    # for its own PKCE flow, the API needs it to validate tokens issued to
+    # it. Not sensitive (a public OAuth client identifier), unlike
+    # AUTH_CLIENT_SECRET.
+    OIDC_CLIENT_ID: mestier
 
 gatewayApi:
   parentRefs:
