@@ -11,12 +11,12 @@ api:
     pullPolicy: Always
   env:
     ALLOWED_ORIGINS: https://app.mestier.fr
-    # Distinct OIDC client per environment, all against the one shared
-    # Ferriskey instance (see base/mestier/values.yaml's AUTH_ISSUER) — so a
-    # token issued for staging/dev is not accepted here. Register this
-    # client id in Ferriskey and create the matching secret below before
-    # first sync (see README.md).
-    AUTH_CLIENT_ID: mestier
+    # The API and the webapp are two distinct OIDC clients here — not a
+    # shared one — against the one shared Ferriskey instance (see
+    # base/mestier/values.yaml's AUTH_ISSUER). Register both in Ferriskey
+    # and create the matching secret below before first sync (see
+    # README.md).
+    AUTH_CLIENT_ID: api
   secret:
     valueFrom:
       # Created out-of-band, same pattern as mestier-rustfs-credentials —
@@ -32,11 +32,10 @@ webapp:
   env:
     API_URL: https://api.mestier.fr
     ISSUER_URL: https://auth.mestier.fr/realms/mestier
-    # Same client id as api.env.AUTH_CLIENT_ID above — the frontend needs it
-    # for its own PKCE flow, the API needs it to validate tokens issued to
-    # it. Not sensitive (a public OAuth client identifier), unlike
-    # AUTH_CLIENT_SECRET.
-    OIDC_CLIENT_ID: mestier
+    # Its own client, distinct from api.env.AUTH_CLIENT_ID — a public PKCE
+    # client for the browser flow, not the API's. Not sensitive (a public
+    # OAuth client identifier), unlike AUTH_CLIENT_SECRET.
+    OIDC_CLIENT_ID: webapp
 
 gatewayApi:
   parentRefs:
