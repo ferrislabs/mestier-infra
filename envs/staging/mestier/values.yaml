@@ -1,7 +1,7 @@
 # Mestier Helm values — staging overrides.
 api:
   image:
-    tag: sha-16be7bb
+    tag: sha-8c4d56c
     # See production's values.yaml for why this is Always, not the chart
     # default — bootstrap-only, until Kargo owns image.tag with sha-* tags.
     pullPolicy: Always
@@ -42,7 +42,7 @@ api:
 
 webapp:
   image:
-    tag: sha-16be7bb
+    tag: sha-8c4d56c
     pullPolicy: Always
   env:
     # Same host as the API — see gatewayApi below. The webapp calls its own
