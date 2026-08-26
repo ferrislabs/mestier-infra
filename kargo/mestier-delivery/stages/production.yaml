@@ -53,6 +53,7 @@ spec:
             path: ./out
             message: ${{ outputs['update-values'].commitMessage }}
         - uses: git-push
+          as: push
           config:
             path: ./out
             targetBranch: main
@@ -70,9 +71,14 @@ spec:
               Production promotion — api ${{ imageFrom("ghcr.io/ferrislabs/mestier-api").Tag }},
               webapp ${{ imageFrom("ghcr.io/ferrislabs/mestier-webapp").Tag }}
         - uses: git-push
+          as: push-tag
           config:
             path: ./out
             tag: production-${{ imageFrom("ghcr.io/ferrislabs/mestier-api").Tag }}
+        # A real Discord embed, not a bare `content` string — see staging.yaml
+        # for the reasoning. Production additionally links its `tag` field to
+        # the exact commit the `production-*` tag now points at, since that
+        # tag is this Stage's audit trail (see the header comment above).
         - uses: http
           as: notify-discord
           config:
@@ -83,11 +89,28 @@ spec:
                 value: application/json
             body: >-
               ${{ quote({
-                "content": "🚀 **production** ← mestier promoted — api `" +
-                  imageFrom("ghcr.io/ferrislabs/mestier-api").Tag +
-                  "`, webapp `" +
-                  imageFrom("ghcr.io/ferrislabs/mestier-webapp").Tag +
-                  "` — Healthy in ArgoCD, tagged `production-" +
-                  imageFrom("ghcr.io/ferrislabs/mestier-api").Tag +
-                  "` on mestier-infra."
+                "embeds": [{
+                  "title": "🚀 production — mestier promoted",
+                  "url": outputs['push'].commitURL,
+                  "description": "Verified **Healthy** in ArgoCD.",
+                  "color": 3066993,
+                  "fields": [
+                    {
+                      "name": "api",
+                      "value": "`" + imageFrom("ghcr.io/ferrislabs/mestier-api").Tag + "`",
+                      "inline": true
+                    },
+                    {
+                      "name": "webapp",
+                      "value": "`" + imageFrom("ghcr.io/ferrislabs/mestier-webapp").Tag + "`",
+                      "inline": true
+                    },
+                    {
+                      "name": "tag",
+                      "value": "[production-" + imageFrom("ghcr.io/ferrislabs/mestier-api").Tag + "](https://github.com/ferrislabs/mestier-infra/tree/production-" + imageFrom("ghcr.io/ferrislabs/mestier-api").Tag + ")",
+                      "inline": false
+                    }
+                  ],
+                  "footer": { "text": "Kargo · mestier-delivery" }
+                }]
               }) }}
