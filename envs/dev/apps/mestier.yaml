@@ -4,7 +4,7 @@ metadata:
   name: mestier-dev
   namespace: argocd
   annotations:
-    # Sync-wave 1: runs after mestier-db-dev/mestier-redis-dev/mestier-rustfs-dev (wave 0).
+    # Sync-wave 1: runs after mestier-db-dev/mestier-redis-dev (wave 0).
     argocd.argoproj.io/sync-wave: "1"
 spec:
   project: default
@@ -14,7 +14,7 @@ spec:
   sources:
     - repoURL: ghcr.io/ferrislabs/charts
       chart: mestier
-      targetRevision: "0.3.0"
+      targetRevision: "0.4.0"
       helm:
         valueFiles:
           - $values/base/mestier/values.yaml
