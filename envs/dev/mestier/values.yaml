@@ -1,7 +1,7 @@
 # Mestier Helm values — dev overrides.
 api:
   image:
-    tag: "latest"   # bootstrap value — the Kargo dev Stage (issue #6) takes ownership of this field
+    tag: sha-16be7bb
     # See production's values.yaml for why this is Always, not the chart
     # default — bootstrap-only, until Kargo owns image.tag with sha-* tags.
     pullPolicy: Always
@@ -23,7 +23,7 @@ api:
 
 webapp:
   image:
-    tag: "latest"
+    tag: sha-16be7bb
     pullPolicy: Always
   env:
     API_URL: https://dev-api.mestier.fr
