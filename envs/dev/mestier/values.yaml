@@ -27,7 +27,8 @@ webapp:
     pullPolicy: Always
   env:
     API_URL: https://dev-api.mestier.fr
-    ISSUER_URL: https://auth.mestier.fr/realms/mestier
+    # /api prefix required — see base/mestier/values.yaml's AUTH_ISSUER comment.
+    ISSUER_URL: https://auth.mestier.fr/api/realms/mestier
     # Same client id as api.env.AUTH_CLIENT_ID above — see production's
     # values.yaml for why this isn't sensitive.
     OIDC_CLIENT_ID: mestier-dev

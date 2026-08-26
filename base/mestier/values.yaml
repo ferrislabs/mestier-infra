@@ -10,7 +10,12 @@ api:
     DATABASE_PORT: "5432"
     DATABASE_NAME: app
     DATABASE_USER: app
-    AUTH_ISSUER: https://auth.mestier.fr/realms/mestier
+    # Ferriskey's Gateway routes /api to ferriskey-api and everything else
+    # (including bare /realms/...) to ferriskey-webapp — the issuer must
+    # carry the /api prefix or every OIDC discovery request
+    # (${issuer}/.well-known/openid-configuration) lands on the webapp
+    # instead of the API and 404s.
+    AUTH_ISSUER: https://auth.mestier.fr/api/realms/mestier
     RATE_LIMIT_REDIS_URL: redis://mestier-redis:6379
     FILE_STORAGE_ENDPOINT: http://mestier-rustfs:9000
     FILE_STORAGE_BUCKET: mestier-files
