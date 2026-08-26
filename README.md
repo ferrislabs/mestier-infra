@@ -51,9 +51,25 @@ DRY is achieved with Kustomize base + overlays (raw manifests) and layered Helm 
 
 **Shared Ferriskey** — there is one Ferriskey (IAM) instance, `auth.mestier.fr`, used by every
 environment. `staging`/`dev` deploy only the Mestier data layer + app, no `ferriskey`/`ferriskey-db`
-of their own. Each environment still registers its **own OIDC client** in that shared instance
-(`AUTH_CLIENT_ID`: `mestier` / `mestier-staging` / `mestier-dev`) so a token issued for one
-environment is never accepted by another — see "Ferriskey OIDC client per environment" below.
+of their own. Production has its own realm (`mestier`); `staging` and `dev` **share** a second
+realm (`mestier-staging`) — but each still registers its **own OIDC clients** within whichever
+realm it uses (`api`/`webapp` for production, `api-staging`/`webapp-staging` for staging,
+`api-dev`/`webapp-dev` for dev), so a token issued for one environment is never accepted by
+another even when the realm is shared — see "Ferriskey OIDC client per environment" below.
+
+**Shared RustFS** — similarly, there is one RustFS instance (production's, namespace `mestier`).
+`staging`/`dev` don't deploy their own — they point `FILE_STORAGE_ENDPOINT` at production's
+Service across namespaces and use their own bucket (`mestier-files-staging`, `mestier-files-dev`)
+so environments never share files. The RustFS **credentials** are the same Secret, copied into
+each namespace (see "RustFS prerequisite" below) — not regenerated per environment, since it's
+the same instance underneath.
+
+**One host, path-routed** — `staging`/`dev` each serve api+webapp from a single hostname
+(`staging.mestier.fr`, `dev.mestier.fr`), split by path (`/api` → api, everything else → webapp) —
+the same pattern Ferriskey itself uses on `auth.mestier.fr`. Production predates this convention
+and still uses two hosts (`api.mestier.fr` + `app.mestier.fr`); nothing forces a new environment
+to pick one pattern over the other, but one-host-per-env is one fewer DNS record and one fewer
+`ALLOWED_ORIGINS` entry to keep in sync.
 
 ## Cluster prerequisites (provisioned outside this repo)
 
@@ -64,9 +80,9 @@ environment is never accepted by another — see "Ferriskey OIDC client per envi
 - StorageClass `local-path` (default)
 - DNS, all → `51.91.53.117`:
   `auth.mestier.fr`, `argocd.internal.ferriskey.rs`, `kargo.internal.ferriskey.rs`,
-  `app.mestier.fr`, `api.mestier.fr`, `staging.mestier.fr`, `staging-api.mestier.fr`,
-  `dev.mestier.fr`, `dev-api.mestier.fr` — the `*.mestier.fr` entries are covered by the existing
-  wildcard cert, only the DNS records themselves need adding.
+  `app.mestier.fr`, `api.mestier.fr`, `staging.mestier.fr`, `dev.mestier.fr` — the `*.mestier.fr`
+  entries are covered by the existing wildcard cert, only the DNS records themselves need adding.
+  `staging`/`dev` need only one record each (see "One host, path-routed" above).
 
 ## Bootstrap (run once)
 
@@ -105,36 +121,47 @@ kubectl apply -f kargo/mestier-delivery/application.yaml
 ArgoCD then reconciles each environment automatically. Production also carries Ferriskey:
 - **wave 0** — `ferriskey-db`: CNPG `Cluster` (creates DB `ferriskey` + secret `ferriskey-db-app`)
 - **wave 1** — `ferriskey`: Helm chart (PreSync migration job, then API + webapp + HTTPRoute)
-- **wave 0** — `mestier-db` / `mestier-redis` / `mestier-rustfs` (per env): data layer in
-  namespace `mestier` / `mestier-staging` / `mestier-dev`
+- **wave 0** — `mestier-db` / `mestier-redis` (per env): data layer in namespace `mestier` /
+  `mestier-staging` / `mestier-dev` — `mestier-rustfs` exists in `mestier` only, shared by every env
 - **wave 1** — `mestier` (per env): API + webapp, from the OCI chart
 
-> **RustFS prerequisite, per environment** — each environment's Mestier app references a secret
-> holding its RustFS S3 credentials, which is intentionally **not** in git. Create it once before
-> that environment's `mestier-rustfs` app syncs (the pod stays `Pending`/`CreateContainerConfigError`
-> until it exists). Repeat for `mestier`, `mestier-staging`, `mestier-dev`:
+> **RustFS prerequisite** — production's Mestier app references a secret holding its RustFS S3
+> credentials, which is intentionally **not** in git. Create it once before `mestier-rustfs`
+> syncs (the pod stays `Pending`/`CreateContainerConfigError` until it exists):
 >
 > ```bash
-> ns=mestier   # or mestier-staging / mestier-dev
-> kubectl create namespace "$ns" --dry-run=client -o yaml | kubectl apply -f -
-> kubectl -n "$ns" create secret generic mestier-rustfs-credentials \
+> kubectl create namespace mestier --dry-run=client -o yaml | kubectl apply -f -
+> kubectl -n mestier create secret generic mestier-rustfs-credentials \
 >   --from-literal=accessKey="$(openssl rand -hex 16)" \
 >   --from-literal=secretKey="$(openssl rand -base64 32)"
 > ```
 >
-> Retrieve them later with:
-> `kubectl -n "$ns" get secret mestier-rustfs-credentials -o jsonpath='{.data.accessKey}' | base64 -d`
+> `staging`/`dev` share this same RustFS instance (see "Shared RustFS" above) — copy the same
+> Secret into their namespaces instead of generating new credentials:
+>
+> ```bash
+> for ns in mestier-staging mestier-dev; do
+>   kubectl create namespace "$ns" --dry-run=client -o yaml | kubectl apply -f -
+>   kubectl -n mestier get secret mestier-rustfs-credentials -o json \
+>     | jq --arg ns "$ns" '.metadata = {name: .metadata.name, namespace: $ns}' \
+>     | kubectl apply -f -
+> done
+> ```
+>
+> Retrieve the credentials later with:
+> `kubectl -n mestier get secret mestier-rustfs-credentials -o jsonpath='{.data.accessKey}' | base64 -d`
 
-> **Ferriskey OIDC client per environment** — the Mestier chart omits `AUTH_CLIENT_SECRET`
-> entirely (no env var, no crash) until you provide one, but the API refuses to authenticate
-> without it. For each environment, register an OIDC client in the shared Ferriskey
-> (`AUTH_CLIENT_ID`: `mestier` / `mestier-staging` / `mestier-dev`, redirect URI matching that
-> env's webapp host), then create the secret it's read from:
+> **Ferriskey OIDC clients** — the Mestier chart omits `AUTH_CLIENT_SECRET` entirely (no env var,
+> no crash) until you provide one, but the API refuses to authenticate without it. Register each
+> environment's OIDC clients in the appropriate Ferriskey realm — `api`/`webapp` in realm `mestier`
+> for production, `api-staging`/`webapp-staging` in realm `mestier-staging` for staging,
+> `api-dev`/`webapp-dev` in that same shared `mestier-staging` realm for dev — redirect URI
+> matching that env's webapp host, then create the secret the API client's secret is read from:
 >
 > ```bash
 > ns=mestier   # or mestier-staging / mestier-dev
 > kubectl -n "$ns" create secret generic mestier-oidc-client \
->   --from-literal=clientSecret="<the secret Ferriskey generated for this client>"
+>   --from-literal=clientSecret="<the secret Ferriskey generated for that env's api-* client>"
 > ```
 
 > **Kargo git write-back credential** — the delivery pipeline pushes promoted image tags
@@ -175,8 +202,9 @@ bare-name exception, see "Naming convention" above, and it's the only one with i
 3. `envs/<name>/root.yaml` → `metadata.name: <name>`, `spec.source.path: envs/<name>/apps`.
 4. `envs/<name>/mestier/values.yaml` → update `ALLOWED_ORIGINS`, `AUTH_CLIENT_ID`, `API_URL`,
    `ISSUER_URL`, `gatewayApi.*.hostnames` for the new environment's hosts.
-5. Before first sync: create `mestier-rustfs-credentials` and `mestier-oidc-client` in the new
-   namespace (see "Bootstrap" above), and register the new `AUTH_CLIENT_ID` in Ferriskey.
+5. Before first sync: copy `mestier-rustfs-credentials` into the new namespace and create
+   `mestier-oidc-client` there (see "Bootstrap" above), and register the new environment's OIDC
+   clients in Ferriskey — either its own realm or an existing shared one.
 6. `kubectl apply -f envs/<name>/root.yaml`
 7. If this environment should also receive promoted images: add a `Stage` in
    `kargo/mestier-delivery/stages/`, writing to `envs/<name>/mestier/values.yaml`, and wire its
