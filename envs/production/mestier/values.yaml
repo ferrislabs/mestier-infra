@@ -3,12 +3,13 @@
 
 api:
   image:
+    # Owned by the Kargo production Stage (kargo/mestier-delivery/stages/production.yaml)
+    # from here on — a real, immutable sha-* tag, no longer the "latest"
+    # bootstrap placeholder. Each promotion writes a distinct tag string, so
+    # the chart's default pullPolicy (IfNotPresent) is correct and cheaper
+    # than Always: a new tag always triggers a real pull, an unchanged one
+    # never needs to.
     tag: sha-8c4d56c
-    # `latest` is a mutable tag; the chart's own default (IfNotPresent) would
-    # keep serving whatever was first pulled and never notice a newer push.
-    # Bootstrap-only — remove once Kargo owns `image.tag` with immutable
-    # sha-* tags, where IfNotPresent is correct again.
-    pullPolicy: Always
   env:
     ALLOWED_ORIGINS: https://app.mestier.fr
     # The API and the webapp are two distinct OIDC clients here — not a
@@ -27,8 +28,7 @@ api:
 
 webapp:
   image:
-    tag: sha-8c4d56c
-    pullPolicy: Always
+    tag: sha-8c4d56c   # see api.image's comment above — same reasoning
   env:
     API_URL: https://api.mestier.fr
     # /api prefix required — see base/mestier/values.yaml's AUTH_ISSUER comment.
