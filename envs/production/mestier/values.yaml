@@ -3,7 +3,7 @@
 
 api:
   image:
-    tag: "latest"   # bootstrap value — the Kargo production Stage (issue #6) takes ownership of this field
+    tag: sha-8c4d56c
     # `latest` is a mutable tag; the chart's own default (IfNotPresent) would
     # keep serving whatever was first pulled and never notice a newer push.
     # Bootstrap-only — remove once Kargo owns `image.tag` with immutable
@@ -27,7 +27,7 @@ api:
 
 webapp:
   image:
-    tag: "latest"   # see api.image's pullPolicy comment above — same reasoning
+    tag: sha-8c4d56c
     pullPolicy: Always
   env:
     API_URL: https://api.mestier.fr
