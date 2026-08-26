@@ -2,6 +2,9 @@
 api:
   image:
     tag: "latest"   # bootstrap value — the Kargo staging Stage (issue #6) takes ownership of this field
+    # See production's values.yaml for why this is Always, not the chart
+    # default — bootstrap-only, until Kargo owns image.tag with sha-* tags.
+    pullPolicy: Always
   env:
     ALLOWED_ORIGINS: https://staging.mestier.fr
     # Distinct OIDC client per environment, all against the one shared
@@ -21,6 +24,7 @@ api:
 webapp:
   image:
     tag: "latest"
+    pullPolicy: Always
   env:
     API_URL: https://staging-api.mestier.fr
     ISSUER_URL: https://auth.mestier.fr/realms/mestier
