@@ -52,6 +52,7 @@ spec:
             path: ./out
             message: ${{ outputs['update-values'].commitMessage }}
         - uses: git-push
+          as: push
           config:
             path: ./out
             targetBranch: main
@@ -60,6 +61,12 @@ spec:
             apps:
               - name: mestier-staging
                 namespace: argocd
+        # A real Discord embed, not a bare `content` string: a title,
+        # a link back to the commit that triggered this, per-image fields
+        # (`inline: true` puts api/webapp side by side), and a footer
+        # naming where this came from — the same information the plain
+        # message carried, laid out the way Discord actually renders it
+        # instead of one run-on sentence.
         - uses: http
           as: notify-discord
           config:
@@ -70,9 +77,23 @@ spec:
                 value: application/json
             body: >-
               ${{ quote({
-                "content": "🚧 **staging** ← mestier promoted — api `" +
-                  imageFrom("ghcr.io/ferrislabs/mestier-api").Tag +
-                  "`, webapp `" +
-                  imageFrom("ghcr.io/ferrislabs/mestier-webapp").Tag +
-                  "` — Healthy in ArgoCD."
+                "embeds": [{
+                  "title": "🚧 staging — mestier promoted",
+                  "url": outputs['push'].commitURL,
+                  "description": "Verified **Healthy** in ArgoCD.",
+                  "color": 16099875,
+                  "fields": [
+                    {
+                      "name": "api",
+                      "value": "`" + imageFrom("ghcr.io/ferrislabs/mestier-api").Tag + "`",
+                      "inline": true
+                    },
+                    {
+                      "name": "webapp",
+                      "value": "`" + imageFrom("ghcr.io/ferrislabs/mestier-webapp").Tag + "`",
+                      "inline": true
+                    }
+                  ],
+                  "footer": { "text": "Kargo · mestier-delivery" }
+                }]
               }) }}
