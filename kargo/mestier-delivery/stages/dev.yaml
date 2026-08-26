@@ -12,6 +12,18 @@
 # https://docs.kargo.io/user-guide/reference-docs/promotion-steps/git-push
 # imageFrom() signature (repoURL -> Image{Tag, Digest, ...}) verified against:
 # https://docs.kargo.io/user-guide/reference-docs/expressions
+#
+# argocd-update (last step, no `sources`): before this, "verified" meant only
+# "the git push succeeded" — Kargo's own health assessment defaults to
+# Healthy when a Stage declares no ArgoCD Application, which is not a real
+# check. Referencing the Application here activates "Implicit ArgoCD
+# Verification" (https://docs.kargo.io/user-guide/how-to-guides/verification):
+# the Freight isn't marked verified — and so isn't eligible for auto-promotion
+# to `staging` — until the `mestier-dev` Application actually reaches
+# Healthy, which reflects the real readiness probe on /health. Requires the
+# Application to carry `kargo.akuity.io/authorized-stage: mestier-delivery:dev`
+# (see envs/dev/apps/mestier.yaml) — Kargo silently refuses to manage an
+# Application missing that annotation.
 apiVersion: kargo.akuity.io/v1alpha1
 kind: Stage
 metadata:
@@ -54,3 +66,8 @@ spec:
           config:
             path: ./out
             targetBranch: main
+        - uses: argocd-update
+          config:
+            apps:
+              - name: mestier-dev
+                namespace: argocd

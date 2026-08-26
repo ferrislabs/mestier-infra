@@ -3,6 +3,15 @@
 # (../project-config.yaml) explicitly sets it to false for this Stage, so a
 # promotion here only ever starts from an explicit human trigger
 # (`kargo promote production` / the Kargo UI).
+#
+# Step order after the write-back (git-commit/git-push) is deliberate:
+#   argocd-update -> git-tag -> git-push(tag) -> http
+# argocd-update blocks until `mestier` is observably Healthy (Implicit ArgoCD
+# Verification, see dev.yaml) — everything after it only runs once that's
+# true. So the `production-*` tag on mestier-infra, and the Discord
+# notification, are both proof a promotion was verified healthy, not just
+# attempted: if the rollout comes up broken, this Stage stops at
+# argocd-update and neither the tag nor the notification ever happens.
 apiVersion: kargo.akuity.io/v1alpha1
 kind: Stage
 metadata:
@@ -47,3 +56,38 @@ spec:
           config:
             path: ./out
             targetBranch: main
+        - uses: argocd-update
+          config:
+            apps:
+              - name: mestier
+                namespace: argocd
+        - uses: git-tag
+          as: tag
+          config:
+            path: ./out
+            tag: production-${{ imageFrom("ghcr.io/ferrislabs/mestier-api").Tag }}
+            message: >-
+              Production promotion — api ${{ imageFrom("ghcr.io/ferrislabs/mestier-api").Tag }},
+              webapp ${{ imageFrom("ghcr.io/ferrislabs/mestier-webapp").Tag }}
+        - uses: git-push
+          config:
+            path: ./out
+            tag: production-${{ imageFrom("ghcr.io/ferrislabs/mestier-api").Tag }}
+        - uses: http
+          as: notify-discord
+          config:
+            method: POST
+            url: ${{ secret('discord-webhook').url }}
+            headers:
+              - name: Content-Type
+                value: application/json
+            body: >-
+              ${{ quote({
+                "content": "🚀 **production** ← mestier promoted — api `" +
+                  imageFrom("ghcr.io/ferrislabs/mestier-api").Tag +
+                  "`, webapp `" +
+                  imageFrom("ghcr.io/ferrislabs/mestier-webapp").Tag +
+                  "` — Healthy in ArgoCD, tagged `production-" +
+                  imageFrom("ghcr.io/ferrislabs/mestier-api").Tag +
+                  "` on mestier-infra."
+              }) }}
