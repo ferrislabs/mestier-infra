@@ -7,6 +7,11 @@ api:
   server:
     allowedOrigins:
       - https://auth.mestier.fr
+      # The webapp's OIDC flow (oidc-client-ts, via react-oidc-context)
+      # fetches Ferriskey's token/userinfo endpoints directly from the
+      # browser — without this, the browser's CORS preflight rejects those
+      # requests before they ever reach Ferriskey.
+      - https://app.mestier.fr
 
 gatewayAPI:
   httpRoute:
