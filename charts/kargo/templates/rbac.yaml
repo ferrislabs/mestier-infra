@@ -1,14 +1,26 @@
 {{- include "kargo-platform.validate" . -}}
 {{- if .Values.argocdRbac.create }}
-# Grants the Kargo controller READ-ONLY access to Argo CD's `Application`
-# resources, so it can factor their health/sync state into promotion
-# decisions. Promotion itself is done by writing to git (the controller
-# never patches Applications directly), so get/list/watch is sufficient.
+# Grants the Kargo controller access to Argo CD's `Application` resources.
+# Originally read-only (get/list/watch): promotion itself is done by
+# writing to git, and Argo CD's own `automated`+`selfHeal` sync policy is
+# what actually deploys the change, with no help from Kargo.
+#
+# `patch` was added once every Stage's `promotionTemplate` grew an
+# `argocd-update` step (see mestier-delivery/kargo/stages/*.yaml): that
+# step is what activates Kargo's "Implicit ArgoCD Verification" — it
+# patches the Application to force a refresh and to register an ongoing
+# health check Kargo itself reads back, which is how "promoted" comes to
+# mean "observed Healthy" rather than merely "git push succeeded". Without
+# `patch`, that one step errors with a 403 from the Kubernetes API itself
+# (never reaching Argo CD), the Promotion is left `Errored`, and the
+# Stage's health is stuck `Unknown` — even though Argo CD's own sync
+# already deployed the new image correctly, since that path never needed
+# this Role at all.
 #
 # This replaces (rather than complements) the upstream kargo chart's own
-# Argo CD integration RBAC, which additionally grants `patch` on
-# Applications — see the `argocd:` block in values.yaml, which disables it
-# via `argocd.dataPlane.install` / `argocd.dataPlane.kargoController.install`.
+# Argo CD integration RBAC — see the `argocd:` block in values.yaml, which
+# disables it via `argocd.dataPlane.install` /
+# `argocd.dataPlane.kargoController.install`.
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
@@ -25,6 +37,7 @@ rules:
       - get
       - list
       - watch
+      - patch
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
