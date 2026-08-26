@@ -31,7 +31,8 @@ webapp:
     pullPolicy: Always
   env:
     API_URL: https://api.mestier.fr
-    ISSUER_URL: https://auth.mestier.fr/realms/mestier
+    # /api prefix required — see base/mestier/values.yaml's AUTH_ISSUER comment.
+    ISSUER_URL: https://auth.mestier.fr/api/realms/mestier
     # Its own client, distinct from api.env.AUTH_CLIENT_ID — a public PKCE
     # client for the browser flow, not the API's. Not sensitive (a public
     # OAuth client identifier), unlike AUTH_CLIENT_SECRET.
