@@ -9,7 +9,7 @@ api:
     # the chart's default pullPolicy (IfNotPresent) is correct and cheaper
     # than Always: a new tag always triggers a real pull, an unchanged one
     # never needs to.
-    tag: sha-b162021
+    tag: sha-d0ffed0
   env:
     ALLOWED_ORIGINS: https://app.mestier.fr
     # The API and the webapp are two distinct OIDC clients here — not a
@@ -28,7 +28,7 @@ api:
 
 webapp:
   image:
-    tag: sha-b162021
+    tag: sha-d0ffed0
   env:
     API_URL: https://api.mestier.fr
     # /api prefix required — see base/mestier/values.yaml's AUTH_ISSUER comment.
