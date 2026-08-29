@@ -4,7 +4,7 @@ api:
     # Owned by the Kargo staging Stage from here on — see production's
     # values.yaml for why the chart's default pullPolicy (IfNotPresent) is
     # correct now that this is a real, immutable sha-* tag.
-    tag: sha-5025610
+    tag: sha-862c22b
   env:
     ALLOWED_ORIGINS: https://staging.mestier.fr
     # staging and dev share one realm (mestier-staging), distinct from
@@ -42,7 +42,7 @@ api:
 
 webapp:
   image:
-    tag: sha-5025610
+    tag: sha-862c22b
   env:
     # Same host as the API — see gatewayApi below. The webapp calls its own
     # origin at /api/v1/..., no separate api.staging.mestier.fr.
