@@ -1,0 +1,74 @@
+# Mestier Helm values — shared across every PR preview environment.
+#
+# Layered on top of base/mestier/values.yaml, same as any other environment
+# (see envs/<env>/mestier/values.yaml). What's per-PR (image tags, hostnames,
+# demoSeed.*) is NOT here — it's templated straight into the Application's
+# `helm.valuesObject` by previews/applicationset.yaml, since it varies by
+# pull request number. Everything below is identical for every preview.
+#
+# Previews deploy into the existing `mestier-dev` namespace and reuse dev's
+# data layer as-is (CNPG cluster, Redis, RustFS) — no new persistent
+# infrastructure is provisioned per PR. Isolation between PRs, and between
+# previews and the real dev environment, is handled at the application level
+# (org_id multi-tenancy + each preview seeding its own demo org via
+# demoSeed) rather than at the infra level — see README.md's "Preview
+# environments" section and ferrislabs/mestier#432 (the seeding side).
+
+api:
+  env:
+    # Same CNPG cluster/database as dev — namespace mestier-dev, secret
+    # mestier-db-app (see base/mestier/db/cluster.yaml /
+    # envs/dev/mestier/db/kustomization.yaml). Reused, not provisioned per
+    # PR: base/mestier/values.yaml's DATABASE_HOST/NAME/USER already point
+    # at it and don't need overriding here — listed for clarity only.
+    DATABASE_HOST: mestier-db-rw
+    DATABASE_PORT: "5432"
+    DATABASE_NAME: app
+    DATABASE_USER: app
+    # staging/dev/previews all share the mestier-staging realm (see
+    # "Shared Ferriskey" in README.md).
+    AUTH_ISSUER: https://auth.mestier.fr/api/realms/mestier-staging
+    # One shared OIDC client for every preview, not one per PR — the
+    # client's redirect URI is registered as an anchored regex covering
+    # pr-<n>.mestier.fr for any n. See README.md "Preview environments" for
+    # the one-time registration step.
+    AUTH_CLIENT_ID: api-preview
+    # Same shared RustFS instance every other env uses (production's), and
+    # reuses dev's own bucket rather than minting one per PR — per-PR
+    # separation is by org_id (see demoSeed above), not by storage bucket.
+    FILE_STORAGE_ENDPOINT: http://mestier-rustfs.mestier.svc.cluster.local:9000
+    FILE_STORAGE_BUCKET: mestier-files-dev
+  secret:
+    valueFrom:
+      # dev's own CNPG connection secret, reused as-is.
+      DATABASE_PASSWORD:
+        secretName: mestier-db-app
+        key: password
+      # A distinct Secret from dev's own mestier-oidc-client: the shared
+      # preview client has its own secret, different from dev's api-dev
+      # client, even though both Secrets live in the same mestier-dev
+      # namespace. Created out-of-band — see README.md.
+      AUTH_CLIENT_SECRET:
+        secretName: mestier-oidc-client-preview
+        key: clientSecret
+      # Same RustFS credentials Secret copied into mestier-dev already
+      # (see README.md "RustFS prerequisite") — reused, not regenerated.
+      FILE_STORAGE_ACCESS_KEY_ID:
+        secretName: mestier-rustfs-credentials
+        key: accessKey
+      FILE_STORAGE_SECRET_ACCESS_KEY:
+        secretName: mestier-rustfs-credentials
+        key: secretKey
+
+webapp:
+  env:
+    ISSUER_URL: https://auth.mestier.fr/api/realms/mestier-staging
+    # Public PKCE client id for the browser flow, distinct from
+    # api.env.AUTH_CLIENT_ID above — mirrors the api/webapp client-pair
+    # convention every other environment already uses.
+    OIDC_CLIENT_ID: webapp-preview
+
+gatewayApi:
+  parentRefs:
+    - name: mestier-gateway
+      namespace: default
