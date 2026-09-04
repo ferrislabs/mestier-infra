@@ -78,15 +78,10 @@ spec:
       sources:
         - repoURL: ghcr.io/ferrislabs/charts
           chart: mestier
-          # TODO(preview): bump once ferrislabs/mestier#432 publishes the
-          # chart version that actually understands demoSeed.* (0.4.0,
-          # pinned here, predates it — see the frozen contract in the WS-C
-          # brief). Until this is bumped and confirmed pullable
-          # (`helm show chart oci://ghcr.io/ferrislabs/charts/mestier
-          # --version <new>`), demoSeed.* below is accepted but silently
-          # unused, same ComparisonError-until-pullable caveat the
-          # Bootstrap section already documents for envs/*/apps/mestier.yaml.
-          targetRevision: "0.4.0"
+          # ferrislabs/mestier#432 (demoSeed.* support) shipped in chart 0.5.0
+          # — confirmed pullable and containing demoSeed.* via
+          # `helm show values oci://ghcr.io/ferrislabs/charts/mestier --version 0.5.0`.
+          targetRevision: "0.5.0"
           helm:
             valueFiles:
               - $values/base/mestier/values.yaml
