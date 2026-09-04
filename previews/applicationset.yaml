@@ -1,0 +1,131 @@
+# One Mestier preview per open pull request against ferrislabs/mestier.
+#
+# This is deliberately NOT part of any envs/<env>/root.yaml app-of-apps —
+# same reasoning as kargo/mestier-delivery/: it's a platform-level resource,
+# applied once and left to reconcile itself, not scoped to one environment.
+# See README.md "Preview environments" for the full model and the manual
+# bootstrap steps (GitHub token, Ferriskey OIDC client, its secret).
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: mestier-preview
+  namespace: argocd
+spec:
+  # Go templating (`{{ .number }}`, not the legacy `{{number}}`) so the
+  # values below read the same as any other Go-templated Kubernetes YAML.
+  # missingkey=error turns a typo'd generator field into a hard failure
+  # instead of a silently-rendered "<no value>" in a hostname or tag.
+  goTemplate: true
+  goTemplateOptions:
+    - missingkey=error
+
+  generators:
+    - pullRequest:
+        github:
+          owner: ferrislabs
+          repo: mestier
+          # GitHub API access for anything beyond the low unauthenticated
+          # rate limit. Not created here — manual bootstrap step, same
+          # category as the OIDC client secret below. See README.md.
+          tokenRef:
+            secretName: mestier-preview-github-token
+            key: token
+        # Only open, unmerged PRs are returned — closing or merging a PR
+        # drops it from this list, which is what drives Application
+        # deletion (and, via the finalizer below, resource cleanup) on
+        # PR close. No `labels:` filter: every open PR gets a preview.
+        # Poll interval: how often the generator re-lists open PRs absent a
+        # webhook push (not configured here — polling is simpler and one
+        # more moving part isn't worth it for a preview environment).
+        requeueAfterSeconds: 1800
+
+  template:
+    metadata:
+      # Globally unique across the flat `argocd` Application namespace
+      # (see README.md "Naming convention") — "mestier-pr-<n>" can't
+      # collide with any existing or future per-env Application name.
+      name: "mestier-pr-{{.number}}"
+      namespace: argocd
+      labels:
+        preview: "true"
+      annotations:
+        # No kargo.akuity.io/authorized-stage here on purpose: Kargo's
+        # promotion pipeline (dev -> staging -> production) doesn't reach
+        # previews, and Kargo silently refuses to touch an Application
+        # missing this annotation anyway — so simply not setting it is
+        # sufficient isolation from that pipeline.
+        preview.mestier.fr/pull-request: "https://github.com/ferrislabs/mestier/pull/{{.number}}"
+      # This is what actually deletes the deployed resources when the PR
+      # closes and the ApplicationSet controller removes this generated
+      # Application: without it, deleting the Application CR leaves
+      # everything it deployed running (ArgoCD's `prune: true` below only
+      # prunes resources during a *sync*, i.e. ones removed from desired
+      # state while the Application still exists — it does not fire on
+      # Application deletion by itself).
+      finalizers:
+        - resources-finalizer.argocd.argoproj.io
+    spec:
+      project: default
+      destination:
+        server: https://kubernetes.default.svc
+        # Reused, not a new namespace per PR (or at all) — see README.md
+        # "Preview environments". Resources for different PRs are told
+        # apart by name (the Helm release name — which ArgoCD defaults to
+        # this Application's own name, "mestier-pr-<n>" — is baked into
+        # every resource name by the chart's `mestier.fullname` helper),
+        # not by namespace.
+        namespace: mestier-dev
+      sources:
+        - repoURL: ghcr.io/ferrislabs/charts
+          chart: mestier
+          # TODO(preview): bump once ferrislabs/mestier#432 publishes the
+          # chart version that actually understands demoSeed.* (0.4.0,
+          # pinned here, predates it — see the frozen contract in the WS-C
+          # brief). Until this is bumped and confirmed pullable
+          # (`helm show chart oci://ghcr.io/ferrislabs/charts/mestier
+          # --version <new>`), demoSeed.* below is accepted but silently
+          # unused, same ComparisonError-until-pullable caveat the
+          # Bootstrap section already documents for envs/*/apps/mestier.yaml.
+          targetRevision: "0.4.0"
+          helm:
+            valueFiles:
+              - $values/base/mestier/values.yaml
+              - $values/previews/mestier/values.yaml
+            # Per-PR overrides only — everything shared by every preview
+            # lives in previews/mestier/values.yaml instead. Kept as one
+            # valuesObject (native structured YAML) rather than a list of
+            # helm.parameters `--set` strings, so the hostnames arrays stay
+            # readable YAML instead of `gatewayApi.api.hostnames[0]=...`.
+            valuesObject:
+              api:
+                image:
+                  tag: "pr-{{.number}}"
+                env:
+                  ALLOWED_ORIGINS: "https://pr-{{.number}}.mestier.fr"
+              webapp:
+                image:
+                  tag: "pr-{{.number}}"
+                env:
+                  API_URL: "https://pr-{{.number}}.mestier.fr"
+              gatewayApi:
+                api:
+                  hostnames:
+                    - "pr-{{.number}}.mestier.fr"
+                  path: /api
+                webapp:
+                  hostnames:
+                    - "pr-{{.number}}.mestier.fr"
+                  path: /
+              demoSeed:
+                enabled: true
+                orgSlug: "pr-{{.number}}"
+                orgName: "Preview PR {{.number}}"
+        - repoURL: https://github.com/ferrislabs/mestier-infra
+          targetRevision: main
+          ref: values
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        syncOptions:
+          - CreateNamespace=true
