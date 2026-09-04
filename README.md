@@ -288,12 +288,27 @@ main Bootstrap section above for the same pattern with `mestier-oidc-client`):
    kubectl -n argocd create secret generic mestier-preview-github-token \
      --from-literal=token="<fine-grained PAT, ferrislabs/mestier, read-only>"
    ```
-5. **Chart version** — `previews/applicationset.yaml` pins `targetRevision: "0.4.0"`, which predates
-   `demoSeed.*` support (landing via `ferrislabs/mestier#432`, in progress). Bump it once that chart
-   version is published and pullable — same ordering caveat the main Bootstrap section calls out for
-   `envs/*/apps/mestier.yaml`: applying early just leaves the Application in `ComparisonError` until
-   the chart shows up, not destructive but confusing to debug blind.
-6. Apply the `ApplicationSet` itself:
+5. **Chart version** — `previews/applicationset.yaml` pins `targetRevision`. It must point at a chart
+   version that's actually published and contains `demoSeed.*`
+   (`helm show values oci://ghcr.io/ferrislabs/charts/mestier --version <version>`) — bumping
+   `Chart.yaml`'s `version` on `mestier` alone does nothing until `helm-chart-release` republishes
+   under that new version (it silently skips if the version already exists on GHCR). Applying early
+   just leaves the Application in `ComparisonError` until the chart shows up, not destructive but
+   confusing to debug blind.
+6. **GitHub PR comment on deploy** (`charts/argocd/values.yaml` → `argo-cd.notifications.*`) — a
+   Vercel-style comment posted once a preview `Application` is `Synced`+`Healthy`, scoped to previews
+   only via the `notifications.argoproj.io/subscribe.on-preview-deployed.webhook` annotation in
+   `previews/applicationset.yaml`. `notifications.secret.create: false` on purpose (same reasoning as
+   `mestier-oidc-client`: the chart would otherwise wipe an out-of-band token on every
+   `helm upgrade`), so the real secret is manual:
+   ```bash
+   kubectl -n argocd create secret generic argocd-notifications-secret \
+     --from-literal=github-comment-token="<fine-grained PAT, ferrislabs/mestier, Issues: read/write>"
+   ```
+   Requires re-running the Bootstrap section's `helm upgrade --install argocd charts/argocd -n argocd`
+   for the notifiers/trigger/template config itself to take effect (it's plain Helm values, not
+   something ArgoCD self-syncs).
+7. Apply the `ApplicationSet` itself:
    ```bash
    kubectl apply -f previews/applicationset.yaml
    ```

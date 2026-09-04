@@ -34,6 +34,54 @@ argo-cd:
   dex:
     enabled: false
 
+  # Vercel-style PR comment when a preview environment (previews/applicationset.yaml)
+  # finishes deploying. Scoped to preview Applications only, via the
+  # notifications.argoproj.io/subscribe.on-preview-deployed.webhook annotation
+  # on that ApplicationSet's template — dev/staging/production never subscribe,
+  # so this notifier never fires for them.
+  #
+  # secret.create is false on purpose: the chart's own Secret template
+  # re-renders `data` from notifications.secret.items on every `helm upgrade`,
+  # which would wipe a token added out-of-band. Same reasoning as
+  # `mestier-oidc-client` elsewhere in this repo — manage the real secret by
+  # hand, once (see README "Preview environments" bootstrap steps):
+  #   kubectl -n argocd create secret generic argocd-notifications-secret \
+  #     --from-literal=github-comment-token="<fine-grained PAT, ferrislabs/mestier, Issues: read/write>"
+  notifications:
+    secret:
+      create: false
+
+    notifiers:
+      service.webhook.github-pr-comment: |
+        url: https://api.github.com
+        headers:
+        - name: Authorization
+          value: Bearer $github-comment-token
+        - name: Accept
+          value: application/vnd.github+json
+
+    triggers:
+      # oncePer app name, not sync revision: previews re-sync on every push to
+      # the PR (mutable pr-<n> image tag), and we want one welcome comment per
+      # PR, not one per resync.
+      trigger.on-preview-deployed: |
+        - when: app.status.operationState.phase == 'Succeeded' and app.status.sync.status == 'Synced' and app.status.health.status == 'Healthy'
+          oncePer: app.metadata.name
+          send: [preview-deployed-comment]
+
+    templates:
+      template.preview-deployed-comment: |
+        webhook:
+          github-pr-comment:
+            method: POST
+            path: |
+              {{- $pr := index .app.metadata.annotations "preview.mestier.fr/pull-request" | splitList "/" | last -}}
+              /repos/ferrislabs/mestier/issues/{{ $pr }}/comments
+            body: |
+              {{- $pr := index .app.metadata.annotations "preview.mestier.fr/pull-request" | splitList "/" | last -}}
+              {{- $url := printf "https://pr-%s.mestier.fr" $pr -}}
+              {"body": "🚀 **Preview deployed:** {{ $url }}\n\nSynced revision `{{.app.status.sync.revision}}`."}
+
   configs:
     params:
       # TLS terminates at the Gateway; serve the API/UI in insecure (HTTP) mode
