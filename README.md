@@ -222,6 +222,82 @@ bare-name exception, see "Naming convention" above, and it's the only one with i
 
 The `base/` building blocks are reused as-is — this is the whole point of keeping them env-agnostic.
 
+## Preview environments (one per pull request)
+
+`previews/applicationset.yaml` is an ArgoCD `ApplicationSet` (`pullRequest` generator, GitHub) that
+deploys one Mestier instance per **open** pull request against `ferrislabs/mestier`, at
+`https://pr-<n>.mestier.fr`. It's platform-level, like `kargo/mestier-delivery/` — not part of any
+`envs/<env>/root.yaml`, applied on its own.
+
+**No new persistent infrastructure per PR** — every preview reuses what `dev` already has:
+- **Namespace**: `mestier-dev` — the same one `dev` runs in. PRs are told apart by resource *name*
+  (the Helm release name defaults to the Application name, `mestier-pr-<n>`, which the chart's
+  `mestier.fullname` helper bakes into every resource — `mestier-pr-<n>-api`, `-webapp`, ... —
+  verified collision-free against `dev`'s own `mestier-dev-*` names by rendering both with `helm
+  template`), not by namespace.
+- **Database**: `dev`'s own CNPG cluster (`mestier-db-rw`) and its connection secret
+  (`mestier-db-app`) — not a new `Cluster` per PR.
+- **Redis / RustFS**: same as `dev` — in-namespace Redis, and production's shared RustFS instance
+  with `dev`'s own bucket (`mestier-files-dev`).
+- **Ferriskey**: one shared OIDC client **pair** for every preview (`api-preview` / `webapp-preview`)
+  in the existing shared `mestier-staging` realm — not one client per PR. This works because
+  Ferriskey's redirect-URI matching treats a fully-anchored value (`^...$`) as a regex: registering
+  `^https://pr-[0-9]+\.mestier\.fr/$` on `webapp-preview` covers every PR number (the webapp's OIDC
+  redirect URI is always its own origin with a trailing slash — see
+  `apps/webapp/src/lib/runtime-config.ts`'s `redirect_uri` default in the `mestier` repo — there is
+  no separate `/callback` path).
+
+**Isolation between PRs**, and between previews and `dev` itself, happens at the **application**
+level, not infra: `org_id` multi-tenancy plus each preview seeding its own demo org
+(`demoSeed.orgSlug: pr-<n>`) via the chart's `demoSeed.*` values. See
+[`ferrislabs/mestier#432`](https://github.com/ferrislabs/mestier/issues/432) for the seeding side.
+
+**Not part of the Kargo pipeline** — generated Applications intentionally don't carry
+`kargo.akuity.io/authorized-stage`; Kargo's dev→staging→production promotion doesn't reach previews.
+
+**Cleanup on PR close/merge** — the `pullRequest` generator only lists open PRs, so closing one
+drops it from the list and the ApplicationSet controller deletes the generated Application. The
+`resources-finalizer.argocd.argoproj.io` finalizer on the template (not `syncPolicy.automated.prune`,
+which only prunes *during a sync*, not on Application deletion) is what makes that deletion cascade
+into actually deleting the Deployments/Services/HTTPRoutes/Secret/ConfigMap/ServiceAccount it
+created.
+
+### One-time manual bootstrap
+
+None of these are automated by this repo (no External Secrets Operator or similar here — see the
+main Bootstrap section above for the same pattern with `mestier-oidc-client`):
+
+1. **DNS** — confirm `*.mestier.fr` actually resolves as a wildcard to `51.91.53.117` before relying
+   on this. "Cluster prerequisites" above lists individual hostnames as DNS records to add, which
+   reads as one record per host, not a wildcard — if that's literally true today, `pr-<n>.mestier.fr`
+   won't resolve for any PR number without its own manually-added record, which defeats the point.
+   This is provisioned outside this repo either way; just verify it before the first PR preview is
+   expected to work.
+2. **Ferriskey OIDC client pair** — register `api-preview` (confidential) and `webapp-preview`
+   (public, PKCE) in the `mestier-staging` realm, redirect URI on `webapp-preview`:
+   `^https://pr-[0-9]+\.mestier\.fr/$`.
+3. **OIDC client secret**:
+   ```bash
+   kubectl -n mestier-dev create secret generic mestier-oidc-client-preview \
+     --from-literal=clientSecret="<api-preview's secret from Ferriskey>"
+   ```
+4. **GitHub token**, for the `pullRequest` generator's GitHub API access (a fine-grained PAT scoped
+   to `ferrislabs/mestier` only, read-only on Pull requests/Contents is enough — well beyond the
+   unauthenticated rate limit an ApplicationSet polling every 30 minutes would otherwise hit):
+   ```bash
+   kubectl -n argocd create secret generic mestier-preview-github-token \
+     --from-literal=token="<fine-grained PAT, ferrislabs/mestier, read-only>"
+   ```
+5. **Chart version** — `previews/applicationset.yaml` pins `targetRevision: "0.4.0"`, which predates
+   `demoSeed.*` support (landing via `ferrislabs/mestier#432`, in progress). Bump it once that chart
+   version is published and pullable — same ordering caveat the main Bootstrap section calls out for
+   `envs/*/apps/mestier.yaml`: applying early just leaves the Application in `ComparisonError` until
+   the chart shows up, not destructive but confusing to debug blind.
+6. Apply the `ApplicationSet` itself:
+   ```bash
+   kubectl apply -f previews/applicationset.yaml
+   ```
+
 ## Verify (after apply)
 
 ```bash
