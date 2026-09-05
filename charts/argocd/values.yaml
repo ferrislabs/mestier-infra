@@ -70,11 +70,16 @@ argo-cd:
           send: [preview-deployed-comment]
 
     templates:
+      # `path` below is `|-` (strip), not `|` (clip): `|` keeps exactly one
+      # trailing newline, which lands inside the URL string and breaks Go's
+      # url.Parse with "invalid control character in URL" — the exact failure
+      # seen on mestier-pr-436 (notifications controller logs), independent
+      # of and hiding behind the earlier token/service-name issues.
       template.preview-deployed-comment: |
         webhook:
           github-pr-comment:
             method: POST
-            path: |
+            path: |-
               {{- $pr := index .app.metadata.annotations "preview.mestier.fr/pull-request" | splitList "/" | last -}}
               /repos/ferrislabs/mestier/issues/{{ $pr }}/comments
             body: |
