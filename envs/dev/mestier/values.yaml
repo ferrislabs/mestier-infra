@@ -4,7 +4,7 @@ api:
     # Owned by the Kargo dev Stage from here on — see production's
     # values.yaml for why the chart's default pullPolicy (IfNotPresent) is
     # correct now that this is a real, immutable sha-* tag.
-    tag: sha-95a5be2
+    tag: sha-9f7e718
   env:
     ALLOWED_ORIGINS: https://dev.mestier.fr
     # staging and dev share one realm (mestier-staging), distinct from
