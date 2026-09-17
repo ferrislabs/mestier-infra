@@ -42,7 +42,7 @@ api:
 
 webapp:
   image:
-    tag: sha-b97c889
+    tag: sha-681bd4b
   env:
     # Same host as the API — see gatewayApi below. The webapp calls its own
     # origin at /api/v1/..., no separate api.dev.mestier.fr.
