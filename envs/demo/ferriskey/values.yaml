@@ -1,0 +1,22 @@
+# Ferriskey Helm values — demo environment.
+# Layered on top of base/ferriskey/values.yaml.
+
+publicHost: auth.mestier.fr
+
+api:
+  server:
+    allowedOrigins:
+      - https://auth.mestier.fr
+      # The webapp's OIDC flow (oidc-client-ts, via react-oidc-context)
+      # fetches Ferriskey's token/userinfo endpoints directly from the
+      # browser — without this, the browser's CORS preflight rejects those
+      # requests before they ever reach Ferriskey.
+      - https://demo.mestier.fr
+
+gatewayAPI:
+  httpRoute:
+    # Attach to the existing Envoy Gateway that terminates TLS for *.mestier.fr
+    # (wildcard cert `mestier-tls`). No per-app certificate needed.
+    parentRefs:
+      - name: mestier-gateway
+        namespace: default

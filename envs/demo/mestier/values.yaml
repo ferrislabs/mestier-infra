@@ -1,0 +1,52 @@
+# Mestier Helm values — demo overrides.
+# Layered on top of base/mestier/values.yaml.
+api:
+  image:
+    # Owned by the Kargo demo Stage (kargo/mestier-delivery/stages/demo.yaml)
+    # from here on: a real, immutable sha-* tag written on every push to
+    # `main` of the mestier repo, so the chart's default pullPolicy
+    # (IfNotPresent) is correct.
+    tag: sha-4efa7d2
+  env:
+    ALLOWED_ORIGINS: https://demo.mestier.fr
+    # The realm is base/mestier/values.yaml's (mestier). api-demo/webapp-demo
+    # are this environment's own OIDC clients in it. Register both in
+    # Ferriskey and create the matching secret below before first sync (see
+    # README.md).
+    AUTH_CLIENT_ID: api-demo
+  secret:
+    valueFrom:
+      # Created out-of-band, never committed. See README.md "Bootstrap".
+      AUTH_CLIENT_SECRET:
+        secretName: mestier-oidc-client
+        key: clientSecret
+
+webapp:
+  image:
+    tag: sha-4efa7d2
+  env:
+    # Same host as the API — see gatewayApi below. The webapp calls its own
+    # origin at /api/v1/..., no separate api host.
+    API_URL: https://demo.mestier.fr
+    ISSUER_URL: https://auth.mestier.fr/api/realms/mestier
+    # Public PKCE client for the browser flow, distinct from the API's.
+    # Not sensitive, unlike AUTH_CLIENT_SECRET.
+    OIDC_CLIENT_ID: webapp-demo
+
+gatewayApi:
+  parentRefs:
+    - name: mestier-gateway
+      namespace: default
+  # One host for both — mirrors Ferriskey's own auth.mestier.fr split
+  # (/api -> ferriskey-api, / -> ferriskey-webapp). api's PathPrefix "/api"
+  # is evaluated ahead of webapp's catch-all "/" regardless of which
+  # HTTPRoute object is applied first — Gateway API merges routes for a
+  # hostname by path specificity, not by object identity.
+  api:
+    hostnames:
+      - demo.mestier.fr
+    path: /api
+  webapp:
+    hostnames:
+      - demo.mestier.fr
+    path: /

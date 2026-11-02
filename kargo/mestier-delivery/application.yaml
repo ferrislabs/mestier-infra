@@ -1,8 +1,8 @@
 # ArgoCD Application deploying the Kargo objects for the Mestier delivery
 # pipeline (this directory). Platform infra, deliberately NOT nested under
-# envs/production/apps (an env's app-of-apps): Kargo's Project/Warehouse/Stage
+# envs/demo/apps (an env's app-of-apps): Kargo's Project/Warehouse/Stage
 # objects are cluster-wide delivery plumbing, not part of any one environment.
-# Bootstrap the same way as envs/production/root.yaml:
+# Bootstrap the same way as envs/demo/root.yaml:
 #
 #   kubectl apply -f kargo/mestier-delivery/application.yaml
 #

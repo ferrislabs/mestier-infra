@@ -1,0 +1,35 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: mestier-demo
+  namespace: argocd
+  annotations:
+    # Sync-wave 1: runs after mestier-db-demo/mestier-redis-demo/mestier-rustfs-demo (wave 0).
+    argocd.argoproj.io/sync-wave: "1"
+    # Authorizes the Kargo `demo` Stage (project mestier-delivery) to manage
+    # this Application via an `argocd-update` promotion step — without this,
+    # Kargo refuses to touch it. See
+    # https://docs.kargo.io/user-guide/reference-docs/promotion-steps/argocd-update
+    kargo.akuity.io/authorized-stage: mestier-delivery:demo
+spec:
+  project: default
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: mestier-demo
+  sources:
+    - repoURL: ghcr.io/ferrislabs/charts
+      chart: mestier
+      targetRevision: "0.4.0"
+      helm:
+        valueFiles:
+          - $values/base/mestier/values.yaml
+          - $values/envs/demo/mestier/values.yaml
+    - repoURL: https://github.com/ferrislabs/mestier-infra
+      targetRevision: main
+      ref: values
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

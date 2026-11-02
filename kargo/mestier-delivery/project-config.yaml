@@ -10,8 +10,8 @@
 # editing the Stage.)
 #
 # `ProjectConfig` MUST share its Project's name and live in its namespace.
-# The dev/staging auto-promotion + production manual-only POLICY itself is
-# unchanged from the contract; only the field's location moved.
+# Auto-promotion of the single `demo` Stage is the whole policy; only the
+# field's location moved.
 apiVersion: kargo.akuity.io/v1alpha1
 kind: ProjectConfig
 metadata:
@@ -24,13 +24,7 @@ metadata:
 spec:
   promotionPolicies:
     - stageSelector:
-        name: dev
+        name: demo
+      # demo is the only environment: every new Freight (a fresh pair of
+      # sha-* images pushed on `main`) goes straight to it.
       autoPromotionEnabled: true
-    - stageSelector:
-        name: staging
-      autoPromotionEnabled: true
-    - stageSelector:
-        name: production
-      # Explicit, even though false is the default: production only promotes
-      # on an explicit human trigger (`kargo promote` / UI), never automatically.
-      autoPromotionEnabled: false
