@@ -14,6 +14,10 @@ api:
     # Ferriskey and create the matching secret below before first sync (see
     # README.md).
     AUTH_CLIENT_ID: api-demo
+    # The API only takes tokens that name it or come from a trusted client,
+    # and the default is AUTH_CLIENT_ID alone. The browser signs in with
+    # webapp-demo, so list it or every call answers 401.
+    AUTH_TRUSTED_CLIENTS: webapp-demo
   secret:
     valueFrom:
       # Created out-of-band, never committed. See README.md "Bootstrap".
