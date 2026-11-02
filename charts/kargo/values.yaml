@@ -92,7 +92,7 @@ kargo:
       integrationEnabled: true
       namespace: argocd
       # All Argo CD Applications in this repo live in the argocd namespace
-      # (see envs/production/apps/*.yaml), so watching only that namespace
+      # (see envs/demo/apps/*.yaml), so watching only that namespace
       # lets the controller run on a namespaced Role instead of a
       # ClusterRole. See argocdRbac above and templates/rbac.yaml.
       watchArgocdNamespaceOnly: true

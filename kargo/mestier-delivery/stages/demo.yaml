@@ -1,0 +1,72 @@
+# Stage `demo`: the only Stage, fed straight from the Warehouse. Auto-promotion for this Stage
+# is granted by ProjectConfig (../project-config.yaml), not here — Stage has
+# no promotion-policy field. Source:
+# https://docs.kargo.io/user-guide/how-to-guides/working-with-projects
+#
+# Promotion write-back: git-clone -> yaml-update -> git-commit -> git-push,
+# writing straight to `main` (no PR) so ArgoCD's existing auto-sync on
+# envs/demo/mestier picks it up. Step config fields verified against:
+# https://docs.kargo.io/user-guide/reference-docs/promotion-steps/git-clone
+# https://docs.kargo.io/user-guide/reference-docs/promotion-steps/yaml-update
+# https://docs.kargo.io/user-guide/reference-docs/promotion-steps/git-commit
+# https://docs.kargo.io/user-guide/reference-docs/promotion-steps/git-push
+# imageFrom() signature (repoURL -> Image{Tag, Digest, ...}) verified against:
+# https://docs.kargo.io/user-guide/reference-docs/expressions
+#
+# argocd-update (last step, no `sources`): before this, "verified" meant only
+# "the git push succeeded" — Kargo's own health assessment defaults to
+# Healthy when a Stage declares no ArgoCD Application, which is not a real
+# check. Referencing the Application here activates "Implicit ArgoCD
+# Verification" (https://docs.kargo.io/user-guide/how-to-guides/verification):
+# the promotion only succeeds once the `mestier-demo` Application actually
+# reaches Healthy, which reflects the real readiness probe on /health. Requires the
+# Application to carry `kargo.akuity.io/authorized-stage: mestier-delivery:demo`
+# (see envs/demo/apps/mestier.yaml) — Kargo silently refuses to manage an
+# Application missing that annotation.
+apiVersion: kargo.akuity.io/v1alpha1
+kind: Stage
+metadata:
+  name: demo
+  namespace: mestier-delivery
+  annotations:
+    # Wave 1: after the Warehouse (wave 0) exists.
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  requestedFreight:
+    - origin:
+        kind: Warehouse
+        name: mestier
+      sources:
+        direct: true
+  promotionTemplate:
+    spec:
+      steps:
+        - uses: git-clone
+          config:
+            repoURL: https://github.com/ferrislabs/mestier-infra
+            checkout:
+              - branch: main
+                path: ./out
+        - uses: yaml-update
+          as: update-values
+          config:
+            path: ./out/envs/demo/mestier/values.yaml
+            updates:
+              - key: api.image.tag
+                value: ${{ imageFrom("ghcr.io/ferrislabs/mestier-api").Tag }}
+              - key: webapp.image.tag
+                value: ${{ imageFrom("ghcr.io/ferrislabs/mestier-webapp").Tag }}
+        - uses: git-commit
+          as: commit
+          config:
+            path: ./out
+            message: ${{ outputs['update-values'].commitMessage }}
+        - uses: git-push
+          config:
+            path: ./out
+            targetBranch: main
+        - uses: argocd-update
+          config:
+            apps:
+              - name: mestier-demo
+                namespace: argocd

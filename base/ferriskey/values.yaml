@@ -1,4 +1,4 @@
-# Ferriskey Helm values — common across all environments.
+# Ferriskey Helm values — common across all environments (there is only `demo` now).
 # Chart: oci://ghcr.io/ferriskey/charts/ferriskey (version pinned in the Application).
 # Per-env files override: publicHost, allowedOrigins, httpRoute parentRefs.
 
@@ -8,7 +8,7 @@ postgresql:
 
 common:
   image:
-    tag: "0.8.0-rc2"
+    tag: "0.10.1"
 
 database:
   # Service name is identical in every namespace (CNPG `<cluster>-rw`), and the

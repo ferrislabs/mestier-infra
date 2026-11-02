@@ -1,4 +1,4 @@
-# Kargo Project for the Mestier delivery pipeline (dev -> staging -> production).
+# Kargo Project for the Mestier delivery pipeline (Warehouse -> demo).
 #
 # `Project` is a CLUSTER-SCOPED resource: reconciling it creates a specially
 # labeled Namespace with the SAME NAME as the Project
@@ -6,8 +6,9 @@
 # https://docs.kargo.io/user-guide/how-to-guides/working-with-projects
 #
 # Deliberately named "mestier-delivery", NOT "mestier": the application
-# namespace `mestier` already exists in this cluster (data layer + app, see
-# envs/production/mestier and base/mestier). Confirmed against the docs above
+# namespace is `mestier-demo` (data layer + app, see envs/demo/mestier and
+# base/mestier), and an older `mestier` namespace may still exist on the
+# cluster until the previous environments are cleaned up. Confirmed against the docs above
 # that Project creation is namespace-creating and namespace-adopting only via
 # that label — an unlabeled pre-existing "mestier" namespace would NOT be
 # silently adopted, so this would surface as a namespace-provisioning conflict
