@@ -226,7 +226,7 @@ curl -fsS https://auth.mestier.fr/api/health/ready           # → 200
 kubectl get cluster.postgresql.cnpg.io -n mestier-demo mestier-db   # → healthy
 kubectl get pods -n mestier-demo                                    # → api + webapp + redis + rustfs Running
 kubectl get httproute -n mestier-demo                               # → host demo.mestier.fr
-curl -fsS https://demo.mestier.fr/api/health/ready                  # → 200
+curl -s -o /dev/null -w '%{http_code}\n' https://demo.mestier.fr/api/v1/users/@me/organizations   # → 401 without a token
 
 # Kargo
 kargo get stages --project mestier-delivery                         # → demo, Healthy
