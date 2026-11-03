@@ -56,6 +56,10 @@ spec:
                 value: ${{ imageFrom("ghcr.io/ferrislabs/mestier-api").Tag }}
               - key: webapp.image.tag
                 value: ${{ imageFrom("ghcr.io/ferrislabs/mestier-webapp").Tag }}
+              - key: mcpGateway.image.tag
+                value: ${{ imageFrom("ghcr.io/ferrislabs/mestier-mcp-gateway").Tag }}
+              - key: mcpServer.image.tag
+                value: ${{ imageFrom("ghcr.io/ferrislabs/mestier-mcp-server").Tag }}
         - uses: git-commit
           as: commit
           config:

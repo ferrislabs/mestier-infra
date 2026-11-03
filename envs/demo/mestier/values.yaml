@@ -18,6 +18,9 @@ api:
     # and the default is AUTH_CLIENT_ID alone. The browser signs in with
     # webapp-demo, so list it or every call answers 401.
     AUTH_TRUSTED_CLIENTS: webapp-demo
+    # Audience of the tokens the MCP gateway swaps in (RFC 8693). The realm has
+    # no client called `mestier-api`, so the chart's default does not apply.
+    AUTH_AUDIENCE: api-demo
   secret:
     valueFrom:
       # Created out-of-band, never committed. See README.md "Bootstrap".
@@ -37,6 +40,27 @@ webapp:
     # Not sensitive, unlike AUTH_CLIENT_SECRET.
     OIDC_CLIENT_ID: webapp-demo
 
+# MCP entry point for Claude / ChatGPT, at https://demo.mestier.fr/mcp. The
+# gateway's FerrisKey client secret lives in `mestier-mcp-gateway` (see
+# README.md "MCP"). Tags are owned by the Kargo demo Stage, like api and webapp.
+mcpGateway:
+  enabled: true
+  image:
+    tag: sha-f370d0e
+  existingSecret: mestier-mcp-gateway
+  env:
+    MCP_GATEWAY_RESOURCE_URL: https://demo.mestier.fr/mcp
+    MCP_GATEWAY_ISSUER: https://auth.mestier.fr/api/realms/mestier
+    MCP_GATEWAY_EXCHANGE_AUDIENCE: api-demo
+
+mcpServer:
+  enabled: true
+  image:
+    tag: sha-f370d0e
+
+cerbos:
+  enabled: true
+
 gatewayApi:
   parentRefs:
     - name: mestier-gateway
@@ -54,3 +78,6 @@ gatewayApi:
     hostnames:
       - demo.mestier.fr
     path: /
+  mcp:
+    hostnames:
+      - demo.mestier.fr

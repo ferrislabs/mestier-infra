@@ -1,4 +1,4 @@
-# Warehouse `mestier`: subscribes to both Mestier images. Each reconcile
+# Warehouse `mestier`: subscribes to the four Mestier images (api, webapp, mcp-gateway, mcp-server). Each reconcile
 # combines the latest observed revision of every subscription into a single
 # Freight — this is inherent Warehouse behavior, not a special option.
 # Source: https://docs.kargo.io/user-guide/how-to-guides/working-with-warehouses
@@ -45,6 +45,18 @@ spec:
         cacheByTag: true
     - image:
         repoURL: ghcr.io/ferrislabs/mestier-webapp
+        imageSelectionStrategy: NewestBuild
+        allowTagsRegexes:
+          - "^sha-"
+        cacheByTag: true
+    - image:
+        repoURL: ghcr.io/ferrislabs/mestier-mcp-gateway
+        imageSelectionStrategy: NewestBuild
+        allowTagsRegexes:
+          - "^sha-"
+        cacheByTag: true
+    - image:
+        repoURL: ghcr.io/ferrislabs/mestier-mcp-server
         imageSelectionStrategy: NewestBuild
         allowTagsRegexes:
           - "^sha-"
