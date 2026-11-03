@@ -213,6 +213,31 @@ definitions.
 the chart in the `mestier` repo needs its version published by `helm-chart-release` and the pin
 bumped here.
 
+## MCP
+
+`mestier-demo` also runs the MCP entry point for AI clients: `mcp-gateway`,
+`mcp-server` and Cerbos (chart 0.6.0). Clients reach it at
+`https://demo.mestier.fr/mcp`; only the gateway is routed publicly.
+
+Two things live outside git:
+
+1. **Realm `mestier` in Ferriskey** (admin API): DCR on and CIMD off (ChatGPT's
+   CIMD document asks for `private_key_jwt`, which Ferriskey 0.10.1 does not
+   do), `allowed_resources: [https://demo.mestier.fr/mcp]`, the scopes
+   `mestier.read`, `mestier.doe.write` and `mestier.maintenance.write` open to
+   dynamic clients, a confidential client `mestier-mcp-gateway` with token
+   exchange enabled and a policy `target_audience: api-demo`
+   (`allow_delegation: true`), and a resource owner mapping the resource to that
+   client. See `docs/chantiers/mcp.md` in the mestier repo.
+2. **Secret** holding that client's secret:
+
+```bash
+kubectl -n mestier-demo create secret generic mestier-mcp-gateway \
+  --from-literal=MCP_GATEWAY_EXCHANGE_CLIENT_SECRET="<client secret of mestier-mcp-gateway>"
+```
+
+An organization only answers MCP calls once `mcp_enabled` is set on it.
+
 ## Verify (after apply)
 
 ```bash
