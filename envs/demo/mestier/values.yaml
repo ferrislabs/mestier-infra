@@ -6,7 +6,7 @@ api:
     # from here on: a real, immutable sha-* tag written on every push to
     # `main` of the mestier repo, so the chart's default pullPolicy
     # (IfNotPresent) is correct.
-    tag: sha-d085fcc
+    tag: sha-4dc6472
   env:
     ALLOWED_ORIGINS: https://demo.mestier.fr
     # The realm is base/mestier/values.yaml's (mestier). api-demo/webapp-demo
@@ -30,7 +30,7 @@ api:
 
 webapp:
   image:
-    tag: sha-d085fcc
+    tag: sha-4dc6472
   env:
     # Same host as the API — see gatewayApi below. The webapp calls its own
     # origin at /api/v1/..., no separate api host.
@@ -46,7 +46,7 @@ webapp:
 mcpGateway:
   enabled: true
   image:
-    tag: sha-d085fcc
+    tag: sha-4dc6472
   existingSecret: mestier-mcp-gateway
   env:
     MCP_GATEWAY_RESOURCE_URL: https://demo.mestier.fr/mcp
@@ -56,7 +56,7 @@ mcpGateway:
 mcpServer:
   enabled: true
   image:
-    tag: sha-d085fcc
+    tag: sha-4dc6472
 
 cerbos:
   enabled: true
