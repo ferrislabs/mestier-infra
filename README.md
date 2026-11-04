@@ -18,7 +18,7 @@ mestier-infra/
 ├── base/                   # Env-agnostic building blocks
 │   ├── ferriskey/
 │   │   ├── db/             # Kustomize base for the CNPG database
-│   │   └── values.yaml     # Common Ferriskey Helm values (image 0.10.1)
+│   │   └── values.yaml     # Common Ferriskey Helm values (image 0.10.2-rc1)
 │   └── mestier/            # Mestier app: data layer (Kustomize bases) + common Helm values
 │       ├── db/             # CNPG Postgres cluster (mestier-db)
 │       ├── redis/          # Simple single-node Redis (official image, no HA)
@@ -43,7 +43,7 @@ ArgoCD sees the same Applications. Application names live in one flat `argocd` n
 `argocd app list` before picking one. Namespaces: `mestier-demo` for the app, `ferriskey` for the
 IAM.
 
-**Ferriskey** — one instance, `auth.mestier.fr`, chart `0.10.1`, image `0.10.1`. Realm `mestier`.
+**Ferriskey** — one instance, `auth.mestier.fr`, chart `0.10.1`, image `0.10.2-rc1`. Realm `mestier`.
 The `ferriskey-db` CNPG cluster and its data are the ones that existed before; nothing is
 recreated.
 
@@ -157,7 +157,7 @@ finalizer.
 
 1. Merge the PR, then bootstrap `demo` as above, but apply `envs/demo/root.yaml` **first**, so the
    `ferriskey` / `ferriskey-db` Applications are adopted by the new parent. Check
-   `argocd app get ferriskey` shows `Synced` and the 0.10.1 image rolled out.
+   `argocd app get ferriskey` shows `Synced` and the 0.10.2-rc1 image rolled out.
 2. Delete the old roots **without cascading to their children**, otherwise `ferriskey` goes with
    `mestier-production`:
    ```bash
@@ -244,7 +244,7 @@ An organization only answers MCP calls once `mcp_enabled` is set on it.
 # Ferriskey
 kubectl get cluster.postgresql.cnpg.io -n ferriskey          # → Cluster in healthy state
 kubectl get job -n ferriskey ferriskey-database-migrations   # → Complete
-kubectl get pods -n ferriskey                                # → api + webapp Running, image 0.10.1
+kubectl get pods -n ferriskey                                # → api + webapp Running, image 0.10.2-rc1
 curl -fsS https://auth.mestier.fr/api/health/ready           # → 200
 
 # Mestier
