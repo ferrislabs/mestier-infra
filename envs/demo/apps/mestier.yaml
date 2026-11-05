@@ -12,21 +12,59 @@ metadata:
     # https://docs.kargo.io/user-guide/reference-docs/promotion-steps/argocd-update
     kargo.akuity.io/authorized-stage: mestier-delivery:demo
 spec:
-  project: default
+  project: mestier
   destination:
     server: https://kubernetes.default.svc
     namespace: mestier-demo
-  sources:
-    - repoURL: ghcr.io/ferrislabs/charts
-      chart: mestier
-      targetRevision: "0.6.0"
-      helm:
-        valueFiles:
-          - $values/base/mestier/values.yaml
-          - $values/envs/demo/mestier/values.yaml
-    - repoURL: https://github.com/ferrislabs/mestier-infra
-      targetRevision: main
-      ref: values
+  source:
+    repoURL: https://github.com/ferrislabs/mestier
+    targetRevision: main
+    path: deploy/helm/mestier
+    helm:
+      valueFiles:
+        - values.yaml
+      values: |
+        # Demo environment overrides
+        api:
+          env:
+            DATABASE_HOST: "mestier-demo-db"
+            AUTH_ISSUER: "http://ferriskey-api.ferriskey.svc.cluster.local:3333/realms/mestier"
+            ALLOWED_ORIGINS: "https://demo.mestier.fr"
+            RATE_LIMIT_REDIS_URL: "redis://mestier-demo-redis:6379"
+            FILE_STORAGE_ENDPOINT: "http://mestier-demo-rustfs:9000"
+          secret:
+            create: false
+            existingSecret: "mestier-demo-secret"
+        webapp:
+          env:
+            API_URL: "https://demo.mestier.fr/api"
+            ISSUER_URL: "http://ferriskey-api.ferriskey.svc.cluster.local:3333/realms/mestier"
+            OIDC_CLIENT_ID: "webapp-demo"
+        gatewayApi:
+          parentRefs:
+            - name: mestier-gateway
+              namespace: default
+          api:
+            hostnames:
+              - demo.mestier.fr
+            path: /api
+          webapp:
+            hostnames:
+              - demo.mestier.fr
+            path: /
+        mcpGateway:
+          enabled: true
+          existingSecret: "mestier-demo-mcp-secret"
+          env:
+            MCP_GATEWAY_RESOURCE_URL: "https://demo.mestier.fr/mcp"
+            MCP_GATEWAY_ISSUER: "http://ferriskey-api.ferriskey.svc.cluster.local:3333/realms/mestier"
+            MCP_GATEWAY_EXCHANGE_AUDIENCE: "api-demo"
+        mcpServer:
+          enabled: true
+          env:
+            MCP_SERVER_API_URL: "http://mestier-demo-api:3456"
+        cerbos:
+          enabled: true
   syncPolicy:
     automated:
       prune: true
