@@ -1,12 +1,12 @@
 # Ferriskey Helm values — demo environment.
 # Layered on top of base/ferriskey/values.yaml.
 
-publicHost: auth.mestier.fr
+publicHost: auth.ferrislabs.fr
 
 api:
   server:
     allowedOrigins:
-      - https://auth.mestier.fr
+      - https://auth.ferrislabs.fr
       # The webapp's OIDC flow (oidc-client-ts, via react-oidc-context)
       # fetches Ferriskey's token/userinfo endpoints directly from the
       # browser — without this, the browser's CORS preflight rejects those

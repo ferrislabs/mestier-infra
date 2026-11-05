@@ -4,7 +4,7 @@ metadata:
   name: demo
   namespace: argocd
 spec:
-  project: default
+  project: mestier
   # App-of-apps root for the demo environment: applying this single
   # Application deploys everything under envs/demo/apps.
   source:

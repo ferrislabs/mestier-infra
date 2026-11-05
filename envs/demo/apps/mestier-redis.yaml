@@ -7,7 +7,7 @@ metadata:
     # Sync-wave 0: data layer is provisioned before the Mestier app (wave 1+).
     argocd.argoproj.io/sync-wave: "0"
 spec:
-  project: default
+  project: mestier
   source:
     repoURL: https://github.com/ferrislabs/mestier-infra
     targetRevision: main

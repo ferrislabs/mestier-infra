@@ -35,7 +35,7 @@ webapp:
     # Same host as the API — see gatewayApi below. The webapp calls its own
     # origin at /api/v1/..., no separate api host.
     API_URL: https://demo.mestier.fr
-    ISSUER_URL: https://auth.mestier.fr/api/realms/mestier
+    ISSUER_URL: https://auth.ferrislabs.fr/api/realms/mestier
     # Public PKCE client for the browser flow, distinct from the API's.
     # Not sensitive, unlike AUTH_CLIENT_SECRET.
     OIDC_CLIENT_ID: webapp-demo
@@ -50,7 +50,7 @@ mcpGateway:
   existingSecret: mestier-mcp-gateway
   env:
     MCP_GATEWAY_RESOURCE_URL: https://demo.mestier.fr/mcp
-    MCP_GATEWAY_ISSUER: https://auth.mestier.fr/api/realms/mestier
+    MCP_GATEWAY_ISSUER: https://auth.ferrislabs.fr/api/realms/mestier
     MCP_GATEWAY_EXCHANGE_AUDIENCE: api-demo
 
 mcpServer:
@@ -65,7 +65,7 @@ gatewayApi:
   parentRefs:
     - name: mestier-gateway
       namespace: default
-  # One host for both — mirrors Ferriskey's own auth.mestier.fr split
+  # One host for both — mirrors Ferriskey's own auth.ferrislabs.fr split
   # (/api -> ferriskey-api, / -> ferriskey-webapp). api's PathPrefix "/api"
   # is evaluated ahead of webapp's catch-all "/" regardless of which
   # HTTPRoute object is applied first — Gateway API merges routes for a
